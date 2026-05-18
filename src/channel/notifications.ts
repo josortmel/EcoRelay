@@ -69,7 +69,7 @@ export function buildGroupMsgNotification(
         method: METHOD,
         params: {
             content: msg.text,
-            meta: { from: msg.from, group: msg.group, msg_id: String(msg.msg_id), ts: msg.ts },
+            meta: { from: msg.from, group: msg.group, msg_id: msg.msg_id, ts: msg.ts },
         },
     };
 }

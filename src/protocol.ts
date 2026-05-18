@@ -292,7 +292,9 @@ export const GroupInfoResultMsg = z.object({
     type: z.literal("group_info_result"),
     group: z.string(),
     admin: z.string(),
-    members: z.array(z.object({ name: z.string(), last_read: z.number(), online: z.boolean() })),
+    members: z.array(
+        z.object({ name: z.string(), last_read: z.number().optional(), online: z.boolean() }),
+    ),
     unread_count: z.number(),
     req_id: z.string().optional(),
 });
@@ -301,7 +303,7 @@ export const IncomingGroupMsgMsg = z.object({
     group: z.string(),
     from: z.string(),
     text: z.string(),
-    msg_id: z.number(),
+    msg_id: z.string(),
     ts: z.string(),
 });
 

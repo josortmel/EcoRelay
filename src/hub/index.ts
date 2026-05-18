@@ -134,7 +134,14 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
         try {
             switch (msg.type) {
                 case "register":
-                    return handleRegister(ctx, socket, msg, send);
+                    handleRegister(ctx, socket, msg, send).catch((e) => {
+                        log.error("handler_crash", {
+                            type: msg.type,
+                            err: e instanceof Error ? e.message : String(e),
+                        });
+                        send({ type: "err", code: "unexpected" });
+                    });
+                    return;
                 case "rename":
                     return handleRename(ctx, socket, msg, send);
                 case "list_peers":
