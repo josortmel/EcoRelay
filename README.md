@@ -4,9 +4,34 @@ Let local Claude Code sessions talk to each other in natural language.
 
 Running two Claude sessions on different projects? In one, say _"ask the backend session if the auth token shape changed"_ and the other answers. Or _"ask everyone what they're working on"_ and replies stream back. Need a subgroup chat? Use rooms.
 
-> **Eco Consulting fork — v0.3.1.** This is a fork of [innestic/claude-relay](https://github.com/innestic/claude-relay) maintained by [Eco Consulting](https://github.com/EcoConsulting). The upstream ships v0.1.0; this fork adds **fixed identity**, **ephemeral rooms**, **zombie eviction**, and **persistent groups**. Install instructions below point to this fork; full release notes in [CHANGELOG.md](CHANGELOG.md).
+> **Eco Consulting fork — v0.4.0.** This is a fork of [innestic/claude-relay](https://github.com/innestic/claude-relay) maintained by [Eco Consulting](https://github.com/EcoConsulting). The upstream ships v0.1.0; this fork adds **fixed identity**, **ephemeral rooms**, **zombie eviction**, **persistent groups**, and **cross-machine LAN federation**. Install instructions below point to this fork; full release notes in [CHANGELOG.md](CHANGELOG.md).
 
 <img width="1280" height="678" alt="ezgif-7f30f78a18c9905f" src="https://github.com/user-attachments/assets/9a132dfa-9db1-4550-96e0-cd25a2744fce" />
+
+## What's new in v0.4.0
+
+**Cross-machine LAN federation** — two machines on the same network can now exchange relay messages:
+
+- Hub-to-hub TCP bridge with shared secret authentication.
+- Remote peers appear as `name@hub_id` in `relay_peers` — transparent routing.
+- `relay_ask(to="Dev1@laptop")` works exactly like asking a local peer.
+- Exponential retry with backoff (1s→30s) on connection failure + auto-reconnect.
+- Bridge disconnect sends immediate `peer_gone` to in-flight callers (no 600s hang).
+- Security: 5 adversarial loops. `from` always re-qualified with verified hub_id, `ServerMsgSchema` validation on all forwarded messages, cross-hub ask guards.
+- Diagnostic script: `bun run scripts/bridge-check.ts` verifies config, ports, connectivity, and handshake.
+
+**Setup:** create `bridge.json` in the relay data directory on each machine:
+
+```json
+{
+    "hub_id": "my-machine",
+    "listen": 9700,
+    "secret": "shared-secret-min-8-chars",
+    "peers": [{ "hub_id": "other-machine", "host": "192.168.1.X", "port": 9700 }]
+}
+```
+
+Without `bridge.json`, relay works as a local-only tool — no changes needed.
 
 ## What's new in v0.3.1
 
@@ -171,8 +196,8 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ## Out of scope
 
-- Single user per machine; no auth or access control
-- Same-host only; no cross-machine relaying
+- Single user per machine; no multi-tenant auth
+- LAN only in v0.4; internet relay planned for future versions
 
 ## Development
 

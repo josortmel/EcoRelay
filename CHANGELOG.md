@@ -4,6 +4,51 @@ All notable changes to this fork are documented here. Format based on [Keep a Ch
 
 This is an internal fork of [innestic/claude-relay](https://github.com/innestic/claude-relay) maintained by Eco Consulting. The public marketplace ships v0.1.0; this branch carries the extensions described below and is not currently distributed via the marketplace.
 
+## [0.4.0] — 2026-05-18
+
+Cross-machine LAN federation: hub-to-hub TCP bridge. Two machines on the same network exchange relay messages transparently. 5 adversarial security loops.
+
+### Added
+
+- **TCP bridge** (`src/hub/bridge.ts`): server + client with shared secret auth, protocol version check, handshake timeout (5s both sides), duplicate hub_id rejection.
+- **Bridge config** (`src/hub/bridge-config.ts`): `bridge.json` loader with Zod validation. Fields: `hub_id`, `listen`, `bind`, `secret`, `peers[]`.
+- **Remote peer registry**: peers from other hubs tracked as `name@hub_id`. Included in `relay_peers`, transparent to `relay_ask`/`relay_reply`.
+- **Bridge forward handler**: receives cross-hub messages, validates with `ServerMsgSchema`, always re-qualifies `from` with verified hub_id (no spoofing), guards `incoming_reply`/`err` to only affect cross-hub asks.
+- **Exponential retry**: connection failures retry at 1s→2s→4s→8s→16s→30s cap. Auto-reconnect on disconnect with attempt reset on success.
+- **Bridge disconnect cleanup**: immediate `peer_gone` to all callers with in-flight asks targeting the disconnected hub. Mirror pending asks cleaned up.
+- **Peer sync**: `bridge_peer_update` messages notify remote hubs when local peers join/leave.
+- **Channel enrichment**: `origin_hub` field in notification meta for cross-machine messages.
+- **Diagnostic script**: `scripts/bridge-check.ts` — validates config, tests port availability, TCP connectivity, and full handshake with each configured peer.
+- **4 bridge protocol schemas**: `BridgeHelloMsg`, `BridgeWelcomeMsg`, `BridgePeerUpdateMsg`, `BridgeForwardMsg`. Separate `BridgeMsgSchema` (not mixed with client/server schemas).
+- 24 new tests (19 bridge + 5 groups). Total suite: 268.
+
+### Security
+
+- Shared secret auth on handshake (plaintext for LAN, HMAC planned for internet).
+- `from` field always stripped and re-qualified with verified `remoteHubId` from handshake — prevents hub impersonation even from authenticated peers.
+- `ServerMsgSchema.safeParse` validates all forwarded messages before delivery to local peers.
+- `incoming_reply` and `err` messages only resolve pending asks where `target.includes("@")` — prevents malicious hub from interfering with local ask/reply flows.
+- Peer arrays capped at 500 per hub (`BridgeHelloMsg`, `BridgeWelcomeMsg`). Remote peers per hub capped at 500.
+- `bridge.json` gets `chmod 0600` on non-Windows.
+- `hub_id` validated with `min(1).max(64)` on wire schemas.
+- Protocol version checked during handshake — incompatible versions rejected.
+- `welcome.hub_id` verified against expected `peerConfig.hub_id` — prevents MITM.
+- Client handshake timeout matches server (5s).
+- Configurable `bind` address (default `0.0.0.0`).
+
+### Fixed
+
+- **`group_create` members sanitized**: initial members array now filtered through `sanitizeSessionName`.
+- **`RenameMsg.new_name` sanitized**: invalid names rejected with `bad_args`.
+- **Dead protocol fields removed**: `origin_peer` from `BridgeForwardMsg`, `hub_id` from `BridgePeerUpdateMsg`.
+
+### Changed
+
+- `HubContext` gains optional `onLocalPeerJoin` callback for bridge peer sync.
+- `pending-asks.ts` gains `cleanupByTargetSuffix` and `cleanupByCallerSuffix` for bridge disconnect cleanup.
+- `registry.ts` gains remote peer tracking (5 new functions).
+- `notifications.ts` extracts `origin_hub` from `@`-qualified `from` fields.
+
 ## [0.3.1] — 2026-05-18
 
 Security hardening + UX from 2-loop adversarial review (adv-seg, adv-code, verificador).
@@ -71,13 +116,10 @@ Persistent groups: WhatsApp-style groups with offline delivery, admin governance
 - 21 new tests (11 GroupStore unit + 10 integration). Total suite: 244 (was 223).
 - All 244 pass on Windows.
 
-### Known debt
+### Known debt (resolved in v0.3.1 and v0.4.0)
 
-- `handleRegister` is async but not awaited in `handleLine` try/catch — unhandled rejection risk on register failure.
-- Empty group name `""` returns `hub_unreachable` instead of `bad_args`.
-- Group existence enumerable via differentiated error codes (`group_not_found` vs `not_admin`).
-- `group_info` exposes `last_read` cursor of all members (read receipts — may be intentional).
-- `group_invite` accepts arbitrary strings as peer names without registry validation.
+All items from v0.3.0 known debt have been resolved: handleRegister async safety, last_read privacy, peer name sanitization, group_create members validation. See v0.3.1 and v0.4.0 changelogs.
+
 - `group_delete` sends no notification to remaining members.
 
 ## [0.2.0] — 2026-05-07
