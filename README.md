@@ -6,9 +6,11 @@ Two sessions on different projects? In one, say _"ask the backend session if the
 
 ## Demo
 
-https://github.com/josortmel/eco-relay/releases/download/v0.5.0/2026-05-19.11-07-27.mp4
+![Eco Relay in action](docs/eco-relay-demo.gif)
 
 Seven AI sessions coordinated in real-time: direct asks, broadcast roll calls, ephemeral rooms, persistent groups with offline delivery, and admin governance — all through natural language.
+
+[Watch the full demo (1:49)](https://github.com/josortmel/eco-relay/releases/download/v0.5.0/eco-relay-demo.mp4)
 
 ## Features
 
