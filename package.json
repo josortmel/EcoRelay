@@ -1,6 +1,16 @@
 {
-    "name": "claude-relay",
-    "version": "0.2.1",
+    "name": "eco-relay",
+    "version": "0.5.0",
+    "author": "Eco Consulting (https://github.com/EcoConsulting)",
+    "contributors": [
+        "josortmel (https://github.com/josortmel)",
+        "Eco Consulting (https://github.com/EcoConsulting)"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/josortmel/eco-relay.git"
+    },
+    "license": "PolyForm-Noncommercial-1.0.0",
     "type": "module",
     "module": "src/channel.ts",
     "scripts": {

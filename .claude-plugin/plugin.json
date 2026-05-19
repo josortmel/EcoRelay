@@ -1,15 +1,15 @@
 {
     "name": "relay",
-    "version": "0.1.0",
-    "description": "Let local Claude Code sessions talk to each other in natural language.",
+    "version": "0.5.0",
+    "description": "Inter-session communication for AI coding assistants. Direct messaging, persistent groups, and cross-machine LAN federation.",
     "author": {
-        "name": "Innestic",
-        "url": "https://github.com/innestic"
+        "name": "Eco Consulting",
+        "url": "https://github.com/EcoConsulting"
     },
-    "homepage": "https://github.com/innestic/claude-relay",
-    "repository": "https://github.com/innestic/claude-relay",
-    "license": "MIT",
-    "keywords": ["mcp", "claude-code", "multi-agent", "messaging"],
+    "homepage": "https://github.com/josortmel/eco-relay",
+    "repository": "https://github.com/josortmel/eco-relay",
+    "license": "PolyForm-Noncommercial-1.0.0",
+    "keywords": ["mcp", "claude-code", "multi-agent", "messaging", "inter-session", "federation"],
     "mcpServers": {
         "relay": {
             "command": "bun",

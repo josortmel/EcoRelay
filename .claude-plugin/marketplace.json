@@ -1,5 +1,5 @@
 {
-    "name": "claude-relay",
+    "name": "eco-relay",
     "owner": {
         "name": "Eco Consulting",
         "url": "https://github.com/EcoConsulting"
@@ -8,8 +8,8 @@
         {
             "name": "relay",
             "source": "./",
-            "description": "Let local Claude Code sessions talk to each other in natural language — with fixed identity, ephemeral rooms, and zombie eviction",
-            "version": "0.2.0"
+            "description": "Inter-session communication for AI coding assistants — direct messaging, persistent groups, cross-machine LAN federation",
+            "version": "0.5.0"
         }
     ]
 }

@@ -13,7 +13,7 @@ export function createMcpServer(
     instructions: string,
 ): { server: Server; toolSchemas: ToolSchema[] } {
     const server = new Server(
-        { name: "relay-channel", version: "0.1.0" },
+        { name: "eco-relay", version: "0.5.0" },
         { capabilities, instructions },
     );
     const toolSchemas = getToolSchemas();

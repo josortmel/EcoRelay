@@ -17,7 +17,7 @@ function isTestEnv(): boolean {
 
 /**
  * Initialize the Winston logger singleton.
- * Creates `~/.claude-relay/logs/` if missing and configures transports.
+ * Creates `~/.eco-relay/logs/` if missing and configures transports.
  * Safe to call multiple times; subsequent calls are no-ops.
  * When `NODE_ENV=test` (set by `bun test`), this is a no-op — no file, no console.
  */

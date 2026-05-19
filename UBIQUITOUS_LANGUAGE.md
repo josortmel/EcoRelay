@@ -4,7 +4,7 @@ Terms used consistently across code, docs, and conversation.
 
 ## Core concepts
 
-**Hub** — single per-machine daemon process that routes messages between peers. Owns the Unix socket at `$CLAUDE_PLUGIN_DATA/hub.sock` (plugin) or `~/.claude-relay/hub.sock` (manual install). Lives independently of any session; self-exits 5 minutes after the last peer disconnects.
+**Hub** — single per-machine daemon process that routes messages between peers. Owns the Unix socket at `$CLAUDE_PLUGIN_DATA/hub.sock` (plugin) or `~/.eco-relay/hub.sock` (manual install). Lives independently of any session; self-exits 5 minutes after the last peer disconnects.
 
 **Channel** — per-session MCP server that connects the session to the hub and exposes the Relay tools to Claude. Each Claude Code session runs one channel.
 

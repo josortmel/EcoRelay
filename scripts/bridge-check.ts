@@ -4,7 +4,7 @@ import * as net from "node:net";
 import * as path from "node:path";
 
 const dataDir =
-    process.env.CLAUDE_PLUGIN_DATA ?? path.join(require("node:os").homedir(), ".claude-relay");
+    process.env.CLAUDE_PLUGIN_DATA ?? path.join(require("node:os").homedir(), ".eco-relay");
 const configPath = path.join(dataDir, "bridge.json");
 
 function fail(msg: string): never {

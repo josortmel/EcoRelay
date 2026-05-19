@@ -1,8 +1,21 @@
 # Changelog
 
-All notable changes to this fork are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
+All notable changes to Eco Relay are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
-This is an internal fork of [innestic/claude-relay](https://github.com/innestic/claude-relay) maintained by Eco Consulting. The public marketplace ships v0.1.0; this branch carries the extensions described below and is not currently distributed via the marketplace.
+Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
+
+## [0.5.0] — 2026-05-19
+
+Rebranded to **Eco Relay**. Independent project under [josortmel/eco-relay](https://github.com/josortmel/eco-relay). License changed from MIT to PolyForm Noncommercial 1.0.0.
+
+### Changed
+
+- Project name: claude-relay → Eco Relay.
+- License: MIT → PolyForm Noncommercial 1.0.0 (original MIT attribution preserved in THIRD_PARTY_LICENSES).
+- Repository: moved from EcoConsulting/claude-relay to josortmel/eco-relay.
+- All version fields synced to 0.5.0.
+- Fallback data directory: `~/.claude-relay/` → `~/.eco-relay/`.
+- MCP server identity: `relay-channel` → `eco-relay`.
 
 ## [0.4.0] — 2026-05-18
 

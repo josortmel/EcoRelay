@@ -76,7 +76,7 @@ Line-delimited JSON over the Unix socket. `readLines(socket, onLine)` buffers by
 
 ### Logging (`src/logger.ts`)
 
-Winston-based JSON logger with daily rotation to `$CLAUDE_PLUGIN_DATA/logs/` (plugin) or `~/.claude-relay/logs/` (manual install). `makeLogger(label)` returns a per-module logger pre-bound with `label` and an event-formatter. Silently disables itself under `NODE_ENV=test` (set by `bun test`) so tests don't pollute the filesystem.
+Winston-based JSON logger with daily rotation to `$CLAUDE_PLUGIN_DATA/logs/` (plugin) or `~/.eco-relay/logs/` (manual install). `makeLogger(label)` returns a per-module logger pre-bound with `label` and an event-formatter. Silently disables itself under `NODE_ENV=test` (set by `bun test`) so tests don't pollute the filesystem.
 
 ## Data flow: one ask, start to reply
 
