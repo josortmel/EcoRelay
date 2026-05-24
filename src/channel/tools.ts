@@ -334,6 +334,7 @@ export async function relaySend(
     const to = args.to;
     const text = args.text;
     if (typeof to !== "string" || typeof text !== "string") return errResult("bad_args");
+    if (to.length > 64) return errResult("bad_args");
     if (text.length > MAX_TEXT_LEN) return errResult("bad_args");
     const replyTo = typeof args.reply_to === "string" ? args.reply_to : undefined;
     if (replyTo && replyTo.length > 256) return errResult("bad_args");

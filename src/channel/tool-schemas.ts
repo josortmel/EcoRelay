@@ -47,7 +47,7 @@ export const TOOLS: ToolSchema[] = [
     {
         name: "relay_reply",
         description:
-            "Reply to an incoming ask by its ask_id. Plain-text, one-shot — no streaming or structured payload. Required when responding to relay_ask. For responding to relay_send messages, use relay_send with reply_to instead.",
+            "Reply to an incoming ask or message. Auto-detects whether the ID is an ask_id (from relay_ask) or msg_id (from relay_send) and routes the reply correctly. text is a plain string — no streaming, no structured payload.",
         inputSchema: {
             type: "object",
             properties: {

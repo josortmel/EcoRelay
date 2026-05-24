@@ -1,7 +1,13 @@
 import type { ServerWebSocket } from "bun";
+import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { BridgeMsgSchema, PROTOCOL_VERSION, type PeerRecord } from "../protocol";
+
+function safeSecretCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 export const RelayConfigSchema = z.object({
     port: z.number().default(9800),
@@ -93,7 +99,7 @@ export function startRelayServer(config: RelayConfig) {
                         ws.close(4002, "protocol_mismatch");
                         return;
                     }
-                    if (hello.secret !== config.secret) {
+                    if (!safeSecretCompare(hello.secret, config.secret)) {
                         ws.close(4003, "auth_failed");
                         return;
                     }

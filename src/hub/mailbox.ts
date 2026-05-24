@@ -51,15 +51,13 @@ export function createMailboxStore(dir: string) {
     }
 
     function generateMsgId(): string {
-        return `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        return `m-${crypto.randomUUID()}`;
     }
 
+    let mailboxCount = fs.readdirSync(dir).filter((f) => f.endsWith(".json")).length;
+
     function totalMailboxCount(): number {
-        try {
-            return fs.readdirSync(dir).filter((f) => f.endsWith(".json")).length;
-        } catch {
-            return 0;
-        }
+        return mailboxCount;
     }
 
     function addMessage(
@@ -85,6 +83,7 @@ export function createMailboxStore(dir: string) {
         if (data.messages.length >= MAX_MAILBOX_MESSAGES) data.messages.shift();
         data.messages.push(message);
         save(data);
+        if (!existing) mailboxCount++;
         return { data, message };
     }
 

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import * as net from "node:net";
 import { readLines, writeLine } from "../framing";
 import { makeLogger } from "../logger";
@@ -5,6 +6,11 @@ import type { BridgeMsg, PeerRecord } from "../protocol";
 import { BridgeMsgSchema, PROTOCOL_VERSION } from "../protocol";
 import type { BridgeConfig, BridgePeerConfig, RelayConfig } from "./bridge-config";
 import type { PeerRegistry } from "./registry";
+
+function safeSecretCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 const log = makeLogger("bridge");
 
@@ -102,7 +108,7 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
                         socket.destroy();
                         return;
                     }
-                    if (hello.secret !== config.secret) {
+                    if (!safeSecretCompare(hello.secret, config.secret)) {
                         log.warn("bridge_auth_failed", { hub_id: hello.hub_id });
                         socket.destroy();
                         return;
