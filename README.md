@@ -92,6 +92,8 @@ Eco Relay ships as a Claude Code plugin. The hub and bridge layers are already p
 
 Requires [Bun](https://bun.sh) and Claude Code 2.1.80+.
 
+> **Windows users**: Bun must be installed on Windows natively, not inside WSL. Claude Code runs as a Windows process and needs `bun` accessible from PowerShell/CMD. Install with: `powershell -c "irm bun.sh/install.ps1 | iex"`
+
 ### 1. Add the marketplace
 
 ```
@@ -104,13 +106,27 @@ Requires [Bun](https://bun.sh) and Claude Code 2.1.80+.
 /plugin install relay@eco-relay
 ```
 
-### 3. Launch with channel capability
+### 3. Install dependencies
 
-Eco Relay delivers messages between turns via `notifications/claude/channel`, a Claude Code research preview capability that lets plugins inject notifications into the conversation. Each session must opt in:
+The plugin marketplace downloads source code but does not install npm dependencies. You must run this manually after install:
 
 ```bash
-claude --dangerously-load-development-channels plugin:relay@eco-relay
+cd ~/.claude/plugins/cache/eco-relay/relay/*/
+bun install
 ```
+
+> **Windows PowerShell**: `cd "$env:USERPROFILE\.claude\plugins\cache\eco-relay\relay\*"; bun install`
+
+### 4. Launch with required flags
+
+Eco Relay needs two flags to work correctly:
+
+```bash
+claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:relay@eco-relay
+```
+
+- `--dangerously-load-development-channels` enables push notifications between sessions. Without it, the MCP connects and tools work, but incoming messages won't appear automatically — you'd have to poll manually.
+- `--dangerously-skip-permissions` prevents confirmation prompts on every tool call.
 
 Open two sessions in different directories and try the examples below.
 
@@ -167,7 +183,7 @@ Rename your session: `/relay-rename backend-api` or just say _"call yourself bac
 Pin a session to a stable name across restarts:
 
 ```bash
-RELAY_PEER_ID=backend-api claude --dangerously-load-development-channels plugin:relay@eco-relay
+RELAY_PEER_ID=backend-api claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:relay@eco-relay
 ```
 
 ## Connection guide
@@ -178,7 +194,17 @@ No configuration needed. The hub daemon starts automatically when the first sess
 
 ### LAN federation (same network, different machines)
 
-Each machine runs its own hub; the TCP bridge links them. Create `~/.eco-relay/bridge.json` on each:
+Each machine runs its own hub; the TCP bridge links them. Create `bridge.json` in the relay data directory on each machine:
+
+```bash
+# Find your data directory (it's where the hub socket lives):
+ls ~/.claude/plugins/data/relay-eco-relay/    # plugin mode (most users)
+ls ~/.eco-relay/                               # standalone/development mode
+```
+
+> **Important**: when installed as a plugin, the hub reads config from `~/.claude/plugins/data/relay-eco-relay/`, NOT from `~/.eco-relay/`. Create `bridge.json` in whichever directory exists on your system.
+
+> **Windows PowerShell**: do NOT use `echo '...' > file.json` — PowerShell adds a BOM that breaks JSON parsing. Use `[System.IO.File]::WriteAllText("path\bridge.json", '{"..."}')` instead.
 
 **Machine A**:
 
@@ -234,7 +260,9 @@ ngrok tcp 9800
 # ngrok gives you a URL like: tcp://0.tcp.ngrok.io:12345
 ```
 
-**Step 2 — Configure each machine** — add `relay` to `~/.eco-relay/bridge.json`:
+**Step 2 — Configure each machine** — add `relay` to your `bridge.json` (see LAN section above for the correct path):
+
+> **Note**: ngrok TCP endpoints require a credit/debit card on file (free, not charged). Add one at https://dashboard.ngrok.com/settings#id-verification
 
 ```json
 {
@@ -250,7 +278,16 @@ With ngrok, use the ngrok URL: `"url": "ws://0.tcp.ngrok.io:12345"`.
 
 The `token` must match the relay server's `secret`. For production, put the relay server behind a TLS-terminating reverse proxy and use `wss://`.
 
-**Step 3 — Restart sessions.** Peers from other machines appear as `name@hub_id` in `relay_peers`. All tools work transparently across networks.
+**Step 3 — Restart the hub and sessions.** The hub daemon must be restarted to read the new `bridge.json`:
+
+```bash
+# Kill the hub daemon (it survives session restarts)
+pkill -f hub-daemon.ts && rm -f ~/.claude/plugins/data/relay-eco-relay/hub.sock
+# Or on Windows:
+# Get-Process -Name "bun" | Where-Object {$_.CommandLine -like "*hub*"} | Stop-Process
+```
+
+Reopen your Claude Code sessions. The hub will respawn and read the bridge config. Peers from other machines appear as `name@hub_id` in `relay_peers`.
 
 ### LAN + Internet simultaneously
 
@@ -274,7 +311,7 @@ Add both `peers` (LAN) and `relay` (internet) to the same bridge.json. Local mac
 - **LAN**: shared secret sent in plaintext over TCP. Acceptable for trusted local networks.
 - **Internet**: use `wss://` with a TLS-terminating reverse proxy for production. For testing, `ngrok tcp` provides a public endpoint.
 - **Notification meta**: all values must be strings (not booleans or numbers). Boolean values in notification meta crash Claude Code sessions.
-- **Data directory**: `~/.eco-relay/` contains bridge.json (secrets), mailboxes, and group data. Permissions set to 0700 (owner-only).
+- **Data directory**: `~/.claude/plugins/data/relay-eco-relay/` (plugin mode) or `~/.eco-relay/` (standalone). Contains bridge.json (secrets), mailboxes, and group data. Permissions set to 0700 (owner-only).
 
 ## Roadmap
 
@@ -317,13 +354,32 @@ Add both `peers` (LAN) and `relay` (internet) to the same bridge.json. Local mac
 ## Debugging
 
 ```bash
-DATA=~/.eco-relay
+# Plugin mode (most users):
+DATA=~/.claude/plugins/data/relay-eco-relay
+# Standalone/development mode:
+# DATA=~/.eco-relay
+
+# Watch relay logs
 tail -f "$DATA/logs/relay-$(date +%Y-%m-%d).log" | jq
+
+# Check if hub is running
 pgrep -f hub-daemon.ts
-pkill -f hub-daemon.ts && rm -f "$DATA/hub.sock"   # force reset
+
+# Force reset (kills hub, removes socket — sessions will respawn it)
+pkill -f hub-daemon.ts && rm -f "$DATA/hub.sock"
 ```
 
-Per-session MCP stderr: `~/Library/Caches/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (macOS) or `%LOCALAPPDATA%/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (Windows). Start there when a channel fails to register.
+**MCP plugin logs** (when the plugin fails to start with error -32000):
+
+- macOS: `~/Library/Caches/claude-cli-nodejs/<project-slug>/mcp-logs-*/`
+- Windows: `%LOCALAPPDATA%\claude-cli-nodejs\<project-slug>\mcp-logs-*/`
+
+**Common issues**:
+
+- `ENOENT while resolving package 'zod'` → run `bun install` in the plugin cache directory (see Install step 3)
+- `MCP error -32000: Connection closed` → check MCP logs above for the real error
+- Bridge connected but no remote peers → verify `bridge.json` is in the correct data directory (see Connection guide)
+- Messages delivered but not pushed → missing `--dangerously-load-development-channels` flag
 
 ## Development
 
@@ -344,7 +400,7 @@ cp .mcp.json.example .mcp.json
 Then uninstall the plugin (`/plugin uninstall relay@eco-relay` inside Claude Code) and launch with:
 
 ```bash
-claude --dangerously-load-development-channels server:relay
+claude --dangerously-skip-permissions --dangerously-load-development-channels server:relay
 ```
 
 Reinstall the plugin when done.
