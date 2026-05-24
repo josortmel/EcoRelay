@@ -77,3 +77,18 @@ export function buildGroupMsgNotification(
         },
     };
 }
+
+export function buildMessageNotification(
+    msg: Extract<ServerMsg, { type: "incoming_message" }>,
+): ChannelNotification {
+    const originHub = msg.from.includes("@") ? msg.from.split("@")[1] : undefined;
+    const meta: Record<string, unknown> = {
+        from: msg.from,
+        msg_id: msg.msg_id,
+    };
+    if (msg.reply_to) meta.reply_to = msg.reply_to;
+    if (originHub) meta.origin_hub = originHub;
+    meta.ts = msg.ts; // FIX 12
+    if (msg.urgent) meta.urgent = true;
+    return { method: METHOD, params: { content: msg.text, meta } };
+}

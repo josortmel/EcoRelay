@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eco Relay Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Geist", system-ui, sans-serif; background: #0a0a0a; }
+
+  .diagram {
+    width: 1200px;
+    height: 520px;
+    padding: 60px;
+    background: oklch(10% 0.005 50);
+    background-image: radial-gradient(circle, oklch(22% 0.012 50) 1px, transparent 1px);
+    background-size: 40px 40px;
+    position: relative;
+  }
+
+  .diagram-title {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #f37513;
+    font-family: "Geist Mono", monospace;
+    margin-bottom: 48px;
+  }
+
+  .arch-layout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    position: relative;
+  }
+
+  /* machine box */
+  .machine {
+    border: 1.5px solid oklch(38% 0.03 50);
+    border-radius: 12px;
+    padding: 28px 24px 24px;
+    background: oklch(13% 0.008 50);
+    position: relative;
+    min-width: 380px;
+  }
+
+  .machine-label {
+    position: absolute;
+    top: -11px;
+    left: 20px;
+    font-family: "Geist Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: oklch(82% 0.014 50);
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    background: oklch(13% 0.008 50);
+    padding: 0 8px;
+  }
+
+  .machine.local { border-color: oklch(48% 0.08 50); }
+  .machine.remote { border-color: oklch(36% 0.03 50); }
+
+  /* hub */
+  .hub {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .hub-box {
+    border: 2px solid #f37513;
+    border-radius: 10px;
+    padding: 14px 32px;
+    background: oklch(16% 0.02 50);
+    text-align: center;
+  }
+
+  .hub-name {
+    font-family: "Geist", sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f37513;
+  }
+
+  .hub-sub {
+    font-family: "Geist Mono", monospace;
+    font-size: 11.5px;
+    color: oklch(82% 0.014 50);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  /* sessions */
+  .sessions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .session {
+    border: 1.5px solid oklch(40% 0.04 50);
+    border-radius: 8px;
+    padding: 12px 16px;
+    background: oklch(15% 0.012 50);
+    text-align: center;
+    flex: 1;
+  }
+
+  .session-icon {
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: oklch(80% 0.10 50);
+    margin-bottom: 5px;
+    letter-spacing: 0.10em;
+  }
+
+  .session-name {
+    font-family: "Geist", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: oklch(96% 0.01 50);
+  }
+
+  .session-sub {
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    color: oklch(78% 0.10 50);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  /* connector lines */
+  .connector-v {
+    display: flex;
+    justify-content: center;
+    margin: 6px 0;
+  }
+
+  .connector-v-line {
+    font-family: "Geist Mono", monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: oklch(60% 0.08 50);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .connector-v-label {
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    color: oklch(78% 0.10 50);
+    text-align: center;
+    margin: 4px 0;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+
+  /* bridge between machines */
+  .bridge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    min-width: 160px;
+  }
+
+  .bridge-line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, oklch(40% 0.08 50), #f37513, oklch(40% 0.08 50));
+    position: relative;
+    margin: 8px 0;
+  }
+
+  .bridge-label {
+    font-family: "Geist Mono", monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f37513;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  .bridge-sub {
+    font-family: "Geist Mono", monospace;
+    font-size: 11px;
+    color: oklch(82% 0.014 50);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* legend */
+  .legend {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-top: 36px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .legend-text {
+    font-family: "Geist Mono", monospace;
+    font-size: 11.5px;
+    color: oklch(80% 0.014 50);
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<div class="diagram">
+  <div class="diagram-title">Architecture — Hub-and-Spoke with LAN Federation</div>
+
+  <div class="arch-layout">
+    <!-- Local machine -->
+    <div class="machine local">
+      <div class="machine-label">Machine A</div>
+
+      <div class="hub">
+        <div class="hub-box">
+          <div class="hub-name">Hub</div>
+          <div class="hub-sub">Unix socket · auto-spawn · auto-exit</div>
+        </div>
+      </div>
+
+      <div class="connector-v">
+        <div>
+          <div class="connector-v-line">│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</div>
+          <div class="connector-v-label">channel (MCP)</div>
+        </div>
+      </div>
+
+      <div class="sessions">
+        <div class="session">
+          <div class="session-icon">SESSION</div>
+          <div class="session-name">backend-api</div>
+          <div class="session-sub">relay_ask · relay_reply</div>
+        </div>
+        <div class="session">
+          <div class="session-icon">SESSION</div>
+          <div class="session-name">frontend</div>
+          <div class="session-sub">relay_ask · relay_reply</div>
+        </div>
+        <div class="session">
+          <div class="session-icon">SESSION</div>
+          <div class="session-name">devops</div>
+          <div class="session-sub">relay_ask · relay_reply</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bridge -->
+    <div class="bridge">
+      <div class="bridge-label">TCP Bridge</div>
+      <div class="bridge-line"></div>
+      <div class="bridge-sub">shared secret auth</div>
+      <div class="bridge-sub">auto-reconnect</div>
+      <div class="bridge-sub">name@hub_id routing</div>
+    </div>
+
+    <!-- Remote machine -->
+    <div class="machine remote">
+      <div class="machine-label">Machine B</div>
+
+      <div class="hub">
+        <div class="hub-box">
+          <div class="hub-name">Hub</div>
+          <div class="hub-sub">Unix socket · auto-spawn · auto-exit</div>
+        </div>
+      </div>
+
+      <div class="connector-v">
+        <div>
+          <div class="connector-v-line">│ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; │</div>
+          <div class="connector-v-label">channel (MCP)</div>
+        </div>
+      </div>
+
+      <div class="sessions">
+        <div class="session">
+          <div class="session-icon">SESSION</div>
+          <div class="session-name">data-team</div>
+          <div class="session-sub">relay_ask · relay_reply</div>
+        </div>
+        <div class="session">
+          <div class="session-icon">SESSION</div>
+          <div class="session-name">ml-pipeline</div>
+          <div class="session-sub">relay_ask · relay_reply</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-dot" style="background: #f37513;"></div>
+      <div class="legend-text">Hub — routes messages, manages peers</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: oklch(55% 0.08 50);"></div>
+      <div class="legend-text">Channel — per-session MCP server</div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background: oklch(70% 0.1 50);"></div>
+      <div class="legend-text">Bridge — optional LAN federation</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

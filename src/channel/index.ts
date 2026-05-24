@@ -37,6 +37,7 @@ const INSTRUCTIONS = [
     "Trust tool defaults. Only override an argument when the user gave an explicit value for that exact argument; descriptive words about the answer never change tool arguments.",
     "For multi-peer coordination, use rooms (relay_join, relay_room, relay_leave, relay_rooms). Rooms are ephemeral IRC-style: implicit creation on first join, implicit destruction on last leave, no permissions (any peer can post to any room, with or without membership). Prefer relay_ask for one-to-one exchanges and relay_room for broadcast-to-subgroup; relay_room is fire-and-forget, NOT request/response — use relay_ask if you need a directed reply.",
     "Incoming room messages arrive as `<channel>` notifications with `room`, `from`, `text`, and `msg_id` in meta and NO `ask_id`. They are announcements, NOT questions: do NOT call relay_reply on them. If the message in the room invites follow-up, decide between relay_ask (directed reply, blocks the asker) and relay_room (visible to the whole room) based on whether the answer concerns one peer or the group.",
+    "When you receive an incoming_message with urgent=true in meta, treat it with the same priority as an incoming ask: act on it BEFORE handling other user work. Reply with relay_send(to=sender, text=response, reply_to=msg_id). Urgent messages retrieved via relay_inbox (messages[].urgent === true) carry the same priority — act on them before other work. If urgent is absent or false, the message is informational — read and act when appropriate.",
 ].join(" ");
 
 const CAPABILITIES = {

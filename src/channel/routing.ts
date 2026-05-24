@@ -5,6 +5,7 @@ import {
     buildAskErrorNotification,
     buildAskNotification,
     buildGroupMsgNotification,
+    buildMessageNotification,
     buildReplyNotification,
     buildRoomMsgNotification,
     type ChannelNotification,
@@ -65,6 +66,10 @@ export function wireHubRouting(
         }
         if (m.type === "incoming_group_msg") {
             emitNotification(buildGroupMsgNotification(m));
+            return;
+        }
+        if (m.type === "incoming_message") {
+            emitNotification(buildMessageNotification(m));
             return;
         }
         if (m.type === "err" && m.ask_id) {

@@ -4,6 +4,44 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [0.6.0] — 2026-05-24
+
+Unified messaging: `relay_send` + `relay_inbox` replace request-response pattern with persistent, timeout-free messaging.
+
+### Added
+
+- **`relay_send(to, text, reply_to?)`**: persistent direct messaging. Returns `{msg_id, status}` — "delivered" (peer online, push notification sent) or "queued" (peer offline, stored for retrieval). Messages persist to disk, no timeout. Use `reply_to` to reference a previous message.
+- **`relay_inbox(limit?, since_id?)`**: on-demand mailbox reader. Paginated, marks messages as read. Call at session start to check for offline messages.
+- **MailboxStore** (`src/hub/mailbox.ts`): per-peer JSON mailbox at `{dataDir}/mailboxes/`. Ring buffer (500 messages FIFO). Atomic writes via temp+rename.
+- **`incoming_message`** server→client notification: real-time push when recipient is online.
+- **Mailbox security**: path traversal protection (basename validation), directory permissions (0o700), MAX_MAILBOXES cap (500), reply_to/since_id/req_id length limits, mailbox I/O error handling.
+- 25+ new tests. Total suite: 320.
+
+### Changed
+
+- `PROTOCOL_VERSION` bumped from `"4"` to `"5"`.
+- `relay_ask` description clarified: use for request-response; `relay_send` for fire-and-forget.
+- `relay_reply` description clarified: required for responding to `relay_ask`; `relay_send` with `reply_to` for responding to `relay_send`.
+- `buildMessageNotification` includes `ts` in notification meta.
+- `handleSend` captures `sendTo` return value — reports "queued" if push fails (honest delivery status).
+
+### Security
+
+- `handleRegister` now calls `sanitizeSessionName` on peer name (was the only handler without it — path traversal via registered name).
+- `reply_to` capped at 256 chars (prevents disk/memory exhaustion via oversized field).
+- `since_id` capped at 64 chars (prevents CPU DoS via string comparison).
+- `req_id` capped at 64 chars in SendMsg and InboxMsg.
+- Mailbox directory created with mode `0o700` (matches hub socket directory).
+- `MAX_MAILBOXES = 500` — caps total mailbox file count (prevents disk exhaustion).
+- `mailbox_error` code now live via try/catch in handleSend/handleInbox.
+- `filePath` rejects `.`, `..`, and path separator characters in owner name.
+
+### Protocol
+
+- 2 new client→hub: `SendMsg`, `InboxMsg`.
+- 3 new hub→client: `SendAckMsg`, `InboxResultMsg`, `IncomingMessageMsg`.
+- New error code: `mailbox_error`.
+
 ## [0.5.0] — 2026-05-19
 
 Rebranded to **Eco Relay**. Independent project under [josortmel/eco-relay](https://github.com/josortmel/eco-relay). License changed from MIT to PolyForm Noncommercial 1.0.0.

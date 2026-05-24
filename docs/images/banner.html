@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eco Relay Social Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 2560px;
+    height: 1280px;
+    overflow: hidden;
+    font-family: "Geist", system-ui, sans-serif;
+  }
+
+  .card {
+    width: 2560px;
+    height: 1280px;
+    background: oklch(12% 0.008 50);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 160px 200px;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, oklch(30% 0.02 50) 1.5px, transparent 1.5px);
+    background-size: 64px 64px;
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  /* network decoration — nodes connected by lines */
+  .network {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 900px;
+    height: 900px;
+    opacity: 0.20;
+  }
+
+  .network circle { fill: oklch(70% 0.14 50); }
+  .network .hub-node { fill: #f37513; opacity: 1; r: 18; }
+  .network line { stroke: oklch(52% 0.10 50); stroke-width: 1.6; }
+  .network .hub-line { stroke: #f37513; stroke-width: 2.4; opacity: 0.75; }
+
+  /* lockup */
+  .lockup {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .lockup svg {
+    width: 108px;
+    height: 108px;
+    flex-shrink: 0;
+  }
+
+  .product-name {
+    width: 800px;
+    height: 172px;
+    flex-shrink: 0;
+  }
+  .product-name svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .tagline {
+    font-family: "Geist", sans-serif;
+    font-size: 48px;
+    font-weight: 400;
+    color: oklch(82% 0.018 50);
+    line-height: 1.45;
+    max-width: 1100px;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 80px;
+  }
+
+  /* pills */
+  .pills {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+
+  .pill {
+    font-family: "Geist Mono", monospace;
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: oklch(82% 0.08 50);
+    border: 2px solid oklch(46% 0.07 50);
+    border-radius: 12px;
+    padding: 12px 28px;
+    background: oklch(17% 0.014 50);
+  }
+
+  .pill.accent {
+    color: oklch(76% 0.19 50);
+    border-color: #f37513;
+    background: oklch(20% 0.04 50);
+  }
+
+  /* chat bubble — bottom right */
+  .chat-demo {
+    position: absolute;
+    bottom: 104px;
+    right: 200px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 16px;
+  }
+
+  .chat-bubble {
+    font-family: "Geist", sans-serif;
+    font-size: 28px;
+    padding: 16px 28px;
+    border-radius: 16px 16px 4px 16px;
+    max-width: 560px;
+    line-height: 1.4;
+  }
+
+  .chat-bubble.ask {
+    background: oklch(20% 0.022 50);
+    border: 1.5px solid oklch(42% 0.05 50);
+    color: oklch(92% 0.014 50);
+    font-style: italic;
+  }
+
+  .chat-bubble.reply {
+    background: oklch(22% 0.05 50);
+    border: 1.5px solid #f37513;
+    color: #f37513;
+    border-radius: 16px 16px 16px 4px;
+    align-self: flex-start;
+  }
+
+  .chat-label {
+    font-family: "Geist Mono", monospace;
+    font-size: 22px;
+    color: oklch(78% 0.014 50);
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+
+  /* footer */
+  .footer-url {
+    position: absolute;
+    bottom: 104px;
+    left: 200px;
+    font-family: "Geist Mono", monospace;
+    font-size: 28px;
+    color: oklch(40% 0.01 50);
+    letter-spacing: 0.04em;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <!-- network decoration -->
+  <svg class="network" viewBox="0 0 900 900">
+    <!-- hub A -->
+    <circle cx="300" cy="350" class="hub-node"/>
+    <!-- spokes from hub A -->
+    <line x1="300" y1="350" x2="120" y2="220" class="hub-line"/>
+    <line x1="300" y1="350" x2="140" y2="440" class="hub-line"/>
+    <line x1="300" y1="350" x2="200" y2="540" class="hub-line"/>
+    <line x1="300" y1="350" x2="380" y2="200" class="hub-line"/>
+    <!-- sessions A -->
+    <circle cx="120" cy="220" r="8"/>
+    <circle cx="140" cy="440" r="8"/>
+    <circle cx="200" cy="540" r="8"/>
+    <circle cx="380" cy="200" r="8"/>
+
+    <!-- bridge -->
+    <line x1="300" y1="350" x2="620" y2="420"/>
+    <line x1="300" y1="350" x2="620" y2="420" stroke-dasharray="12 8" stroke="#f37513" stroke-width="2" opacity="0.4"/>
+
+    <!-- hub B -->
+    <circle cx="620" cy="420" class="hub-node"/>
+    <!-- spokes from hub B -->
+    <line x1="620" y1="420" x2="740" y2="300" class="hub-line"/>
+    <line x1="620" y1="420" x2="780" y2="500" class="hub-line"/>
+    <line x1="620" y1="420" x2="700" y2="580" class="hub-line"/>
+    <!-- sessions B -->
+    <circle cx="740" cy="300" r="8"/>
+    <circle cx="780" cy="500" r="8"/>
+    <circle cx="700" cy="580" r="8"/>
+
+    <!-- extra ambient dots -->
+    <circle cx="80" cy="340" r="4" opacity="0.5"/>
+    <circle cx="460" cy="160" r="4" opacity="0.5"/>
+    <circle cx="500" cy="600" r="4" opacity="0.5"/>
+    <circle cx="820" cy="380" r="4" opacity="0.5"/>
+    <circle cx="340" cy="650" r="4" opacity="0.5"/>
+  </svg>
+
+  <!-- lockup -->
+  <div class="lockup">
+    <svg viewBox="0 0 32 32">
+      <rect x="2" y="2" width="28" height="28" rx="2" fill="none" stroke="oklch(72% 0.01 50)" stroke-width="1.8"/>
+      <line x1="8" y1="10" x2="24" y2="10" stroke="oklch(72% 0.01 50)" stroke-width="2.2" stroke-linecap="square"/>
+      <line x1="8" y1="16" x2="20" y2="16" stroke="#f37513" stroke-width="2.2" stroke-linecap="square"/>
+      <line x1="8" y1="22" x2="24" y2="22" stroke="oklch(72% 0.01 50)" stroke-width="2.2" stroke-linecap="square"/>
+    </svg>
+    <div class="product-name">
+      <svg viewBox="0 0 800 172" xmlns="http://www.w3.org/2000/svg">
+        <text x="0" y="138" font-family="Geist, system-ui, sans-serif" font-size="172" font-weight="700" letter-spacing="-5">
+          <tspan fill="oklch(96% 0.008 50)">Eco </tspan><tspan fill="#f37513">Relay</tspan>
+        </text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="tagline">Inter-session messaging for AI coding assistants.<br>Hub-and-spoke with LAN federation.</div>
+
+  <div class="pills">
+    <span class="pill accent">19 MCP tools</span>
+    <span class="pill">Persistent groups</span>
+    <span class="pill">LAN federation</span>
+    <span class="pill">Ephemeral rooms</span>
+    <span class="pill">TypeScript + Bun</span>
+  </div>
+
+  <!-- chat demo -->
+  <div class="chat-demo">
+    <div class="chat-label">frontend →</div>
+    <div class="chat-bubble ask">"ask backend-api if the auth token shape changed"</div>
+    <div class="chat-label">← backend-api</div>
+    <div class="chat-bubble reply">"yes, added refresh_token field yesterday"</div>
+  </div>
+
+  <!-- footer-url quitado para uso como banner -->
+
+</div>
+</body>
+</html>

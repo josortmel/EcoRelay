@@ -29,7 +29,7 @@ export const TOOLS: ToolSchema[] = [
     {
         name: "relay_ask",
         description:
-            "Ask a specific peer a question. Non-blocking: returns immediately with `{ok, ask_id}`; the reply arrives later as a channel notification whose meta carries the same `ask_id`. Errors tied to this ask (peer_not_found, peer_gone, timeout) also arrive as channel notifications. Correlate by `ask_id`. If multiple peers may share a similar name (e.g., two sessions in different projects with the same directory basename), call relay_peers first and match by `cwd` or `git_branch` to pick the right target.",
+            "Ask a specific peer a question. Non-blocking: returns immediately with {ok, ask_id}; the reply arrives later as a channel notification. For fire-and-forget messages that don't need a correlated reply, use relay_send instead. If multiple peers may share a similar name, call relay_peers first and match by cwd or git_branch to pick the right target.",
         inputSchema: {
             type: "object",
             properties: {
@@ -47,7 +47,7 @@ export const TOOLS: ToolSchema[] = [
     {
         name: "relay_reply",
         description:
-            "Reply to an incoming ask by its ask_id. `text` is a plain string. Replies are one-shot — no streaming, no cancellation, no structured payload. If you need structured data, serialize JSON inside the string; the asker parses it.",
+            "Reply to an incoming ask by its ask_id. Plain-text, one-shot — no streaming or structured payload. Required when responding to relay_ask. For responding to relay_send messages, use relay_send with reply_to instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -246,6 +246,48 @@ export const TOOLS: ToolSchema[] = [
                 group: { type: "string", description: "Group name" },
             },
             required: ["group"],
+        },
+    },
+    {
+        name: "relay_send",
+        description:
+            "Send a persistent message to a peer. Returns {msg_id, status} where status is 'delivered' (peer online) or 'queued' (peer offline, retrieve via relay_inbox). Messages persist on disk (up to 500 per recipient; oldest evicted when full). To reply to a received message, pass reply_to with its msg_id. For request-response exchanges that need correlated replies, use relay_ask/relay_reply instead.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                to: { type: "string", description: "Target peer name" },
+                text: { type: "string", maxLength: MAX_TEXT_LEN, description: "Message content" },
+                reply_to: {
+                    type: "string",
+                    maxLength: 256,
+                    description: "Optional msg_id of the message you are replying to",
+                }, // FIX 7
+                urgent: {
+                    type: "boolean",
+                    description:
+                        "If true, recipient is instructed to act on this message immediately. Default false.",
+                },
+            },
+            required: ["to", "text"],
+        },
+    },
+    {
+        name: "relay_inbox",
+        description:
+            "Read your pending messages. Returns {messages, remaining}. Messages are marked as read after retrieval. If remaining > 0, call again to retrieve the next page. Use since_id for pagination. Call at session start to check for offline messages.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                limit: {
+                    type: "number",
+                    description: "Max messages to return (1-100, default 20)",
+                },
+                since_id: {
+                    type: "string",
+                    maxLength: 64,
+                    description: "Only return messages after this msg_id",
+                }, // FIX 8
+            },
         },
     },
 ];

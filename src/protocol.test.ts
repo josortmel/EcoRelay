@@ -6,7 +6,10 @@ import {
     ClientMsgSchema,
     ErrCodeSchema,
     ErrMsg,
+    InboxMsg,
+    InboxResultMsg,
     IncomingAskMsg,
+    IncomingMessageMsg,
     IncomingReplyMsg,
     IncomingRoomMsgMsg,
     JoinRoomMsg,
@@ -24,6 +27,8 @@ import {
     RoomMsgMsg,
     RoomSendAckMsg,
     RoomsListMsg,
+    SendAckMsg,
+    SendMsg,
     ServerMsgSchema,
 } from "./protocol";
 
@@ -56,8 +61,8 @@ describe("protocol client messages", () => {
         expect(PROTOCOL_VERSION.length).toBeGreaterThan(0);
     });
 
-    test("PROTOCOL_VERSION is '4'", () => {
-        expect(PROTOCOL_VERSION).toBe("4");
+    test("PROTOCOL_VERSION is '5'", () => {
+        expect(PROTOCOL_VERSION).toBe("5");
     });
 
     test("ErrCodeSchema accepts protocol_mismatch", () => {
@@ -355,6 +360,10 @@ describe("protocol server messages", () => {
         expect(parsedSendAck.type).toBe("room_send_ack");
     });
 
+    test("ErrCodeSchema accepts mailbox_error", () => {
+        expect(ErrCodeSchema.parse("mailbox_error")).toBe("mailbox_error");
+    });
+
     test("ask/incoming_ask/incoming_reply accept optional thread_id; reply does not carry one", () => {
         const ask = {
             type: "ask" as const,
@@ -388,5 +397,97 @@ describe("protocol server messages", () => {
             thread_id: "t1",
         };
         expect(IncomingReplyMsg.parse(incomingReply)).toEqual(incomingReply);
+    });
+});
+
+describe("mailbox protocol messages", () => {
+    test("ClientMsgSchema accepts valid send message", () => {
+        const m = { type: "send" as const, to: "alice", text: "hello" };
+        expect(SendMsg.parse(m)).toEqual(m);
+        expect(ClientMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("ClientMsgSchema accepts valid inbox message", () => {
+        const m = { type: "inbox" as const };
+        expect(InboxMsg.parse(m)).toEqual(m);
+        expect(ClientMsgSchema.safeParse(m).success).toBe(true);
+        const m2 = { type: "inbox" as const, limit: 10, since_id: "m-123-abc", req_id: "r1" };
+        expect(ClientMsgSchema.safeParse(m2).success).toBe(true);
+    });
+
+    test("ServerMsgSchema accepts valid send_ack", () => {
+        const m = { type: "send_ack" as const, msg_id: "m-1-abcd", status: "delivered" as const };
+        expect(SendAckMsg.parse(m)).toEqual(m);
+        expect(ServerMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("ServerMsgSchema accepts valid inbox_result", () => {
+        const m = {
+            type: "inbox_result" as const,
+            messages: [
+                {
+                    msg_id: "m-1-abcd",
+                    from: "bob",
+                    text: "hi",
+                    reply_to: null,
+                    ts: "2026-01-01T00:00:00.000Z",
+                },
+            ],
+            remaining: 0,
+        };
+        expect(InboxResultMsg.parse(m)).toEqual(m);
+        expect(ServerMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("ServerMsgSchema accepts valid incoming_message", () => {
+        const m = {
+            type: "incoming_message" as const,
+            msg_id: "m-1-abcd",
+            from: "carol",
+            text: "hey",
+            reply_to: null,
+            ts: "2026-01-01T00:00:00.000Z",
+        };
+        expect(IncomingMessageMsg.parse(m)).toEqual(m);
+        expect(ServerMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("SendMsg accepts urgent=true", () => {
+        const m = { type: "send" as const, to: "bob", text: "hi", urgent: true };
+        expect(SendMsg.parse(m)).toEqual(m);
+        expect(ClientMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("IncomingMessageMsg accepts urgent=true", () => {
+        const m = {
+            type: "incoming_message" as const,
+            msg_id: "m-u1",
+            from: "alice",
+            text: "NOW",
+            reply_to: null,
+            ts: "2026-01-01T00:00:00.000Z",
+            urgent: true,
+        };
+        expect(IncomingMessageMsg.parse(m)).toEqual(m);
+        expect(ServerMsgSchema.safeParse(m).success).toBe(true);
+    });
+
+    test("InboxResultMsg accepts urgent=true on a message entry", () => {
+        const m = {
+            type: "inbox_result" as const,
+            messages: [
+                {
+                    msg_id: "m-u2",
+                    from: "bob",
+                    text: "urgent!",
+                    reply_to: null,
+                    ts: "2026-01-01T00:00:00.000Z",
+                    urgent: true,
+                },
+            ],
+            remaining: 0,
+        };
+        expect(InboxResultMsg.parse(m)).toEqual(m);
+        expect(ServerMsgSchema.safeParse(m).success).toBe(true);
     });
 });

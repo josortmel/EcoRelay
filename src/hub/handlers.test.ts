@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
+import * as net from "node:net";
+import * as os from "node:os";
+import * as path from "node:path";
 import { PROTOCOL_VERSION } from "../protocol";
+import { handleSend, type HubContext } from "./handlers";
 import { startHub } from "./index";
+import { createMailboxStore } from "./mailbox";
+import type { PeerRegistry } from "./registry";
 import { rawConnect, tmpSocket } from "./test-helpers";
 
 describe("hub handlers", () => {
@@ -722,6 +729,178 @@ describe("hub handlers", () => {
         c.close();
     });
 
+    async function reg(c: Awaited<ReturnType<typeof rawConnect>>, name: string) {
+        c.send({
+            type: "register",
+            name,
+            cwd: `/tmp/${name}`,
+            git_branch: "main",
+            protocol_version: PROTOCOL_VERSION,
+        });
+        await c.next();
+    }
+
+    test("send before register errs not_registered", async () => {
+        const a = await rawConnect(sockPath);
+        a.send({ type: "send", to: "bob", text: "hi" });
+        const reply = await a.next();
+        expect(reply.type).toBe("err");
+        if (reply.type === "err") expect(reply.code).toBe("not_registered");
+        a.close();
+    });
+
+    test("send to online target: persists + incoming_message + ack delivered", async () => {
+        const a = await rawConnect(sockPath);
+        const b = await rawConnect(sockPath);
+        await reg(a, "alice");
+        await reg(b, "bob");
+
+        a.send({ type: "send", to: "bob", text: "hello bob" });
+        const ack = await a.next();
+        expect(ack.type).toBe("send_ack");
+        if (ack.type === "send_ack") {
+            expect(ack.status).toBe("delivered");
+            expect(typeof ack.msg_id).toBe("string");
+        }
+        const incoming = await b.next();
+        expect(incoming.type).toBe("incoming_message");
+        if (incoming.type === "incoming_message") {
+            expect(incoming.from).toBe("alice");
+            expect(incoming.text).toBe("hello bob");
+            expect(incoming.reply_to).toBeNull();
+        }
+        a.close();
+        b.close();
+    });
+
+    test("send to offline target: persists + ack queued (no push)", async () => {
+        const a = await rawConnect(sockPath);
+        await reg(a, "alice");
+
+        a.send({ type: "send", to: "ghost", text: "are you there?" });
+        const ack = await a.next();
+        expect(ack.type).toBe("send_ack");
+        if (ack.type === "send_ack") {
+            expect(ack.status).toBe("queued");
+            expect(typeof ack.msg_id).toBe("string");
+        }
+        a.close();
+    });
+
+    test("send with reply_to: incoming_message carries reply_to", async () => {
+        const a = await rawConnect(sockPath);
+        const b = await rawConnect(sockPath);
+        await reg(a, "alice");
+        await reg(b, "bob");
+
+        a.send({ type: "send", to: "bob", text: "first message" });
+        const ack1 = await a.next();
+        const firstMsgId = ack1.type === "send_ack" ? ack1.msg_id : "";
+        await b.next(); // incoming_message
+
+        b.send({ type: "send", to: "alice", text: "reply here", reply_to: firstMsgId });
+        const ack2 = await b.next();
+        expect(ack2.type).toBe("send_ack");
+        const incoming = await a.next();
+        expect(incoming.type).toBe("incoming_message");
+        if (incoming.type === "incoming_message") {
+            expect(incoming.reply_to).toBe(firstMsgId);
+        }
+        a.close();
+        b.close();
+    });
+
+    test("send with bad target name errs bad_args", async () => {
+        const a = await rawConnect(sockPath);
+        await reg(a, "alice");
+
+        a.send({ type: "send", to: "bad name with spaces", text: "hi" });
+        const reply = await a.next();
+        expect(reply.type).toBe("err");
+        if (reply.type === "err") expect(reply.code).toBe("bad_args");
+        a.close();
+    });
+
+    test("inbox: returns unread messages", async () => {
+        const a = await rawConnect(sockPath);
+        const b = await rawConnect(sockPath);
+        await reg(a, "alice");
+        await reg(b, "bob");
+
+        // alice sends two messages to bob while bob is online (they go to mailbox too)
+        a.send({ type: "send", to: "bob", text: "msg1" });
+        await a.next(); // send_ack
+        await b.next(); // incoming_message
+        a.send({ type: "send", to: "bob", text: "msg2" });
+        await a.next(); // send_ack
+        await b.next(); // incoming_message
+
+        // bob's last_read is null before first inbox call — but messages were already marked
+        // via incoming_message delivery. Use a fresh offline peer instead.
+        // Disconnect bob, reconnect as bob2 to simulate fresh session reading queued messages.
+        b.close();
+        await new Promise((r) => setTimeout(r, 20));
+
+        // alice sends offline
+        a.send({ type: "send", to: "carol", text: "offline1" });
+        await a.next();
+        a.send({ type: "send", to: "carol", text: "offline2" });
+        await a.next();
+
+        const carol = await rawConnect(sockPath);
+        await reg(carol, "carol");
+        carol.send({ type: "inbox" });
+        const result = await carol.next();
+        expect(result.type).toBe("inbox_result");
+        if (result.type === "inbox_result") {
+            expect(result.messages.length).toBe(2);
+            expect(result.messages[0]!.text).toBe("offline1");
+            expect(result.messages[1]!.text).toBe("offline2");
+            expect(result.remaining).toBe(0);
+        }
+        a.close();
+        carol.close();
+    });
+
+    test("inbox with since_id: returns only newer messages", async () => {
+        const a = await rawConnect(sockPath);
+        await reg(a, "alice");
+
+        // Use a peer that receives messages while offline
+        const dave = await rawConnect(sockPath);
+        await reg(dave, "dave");
+        dave.close();
+        await new Promise((r) => setTimeout(r, 20));
+
+        a.send({ type: "send", to: "dave", text: "first" });
+        const ack1 = await a.next();
+        const firstId = ack1.type === "send_ack" ? ack1.msg_id : "";
+        a.send({ type: "send", to: "dave", text: "second" });
+        await a.next();
+
+        const dave2 = await rawConnect(sockPath);
+        await reg(dave2, "dave");
+
+        dave2.send({ type: "inbox", since_id: firstId });
+        const result = await dave2.next();
+        expect(result.type).toBe("inbox_result");
+        if (result.type === "inbox_result") {
+            expect(result.messages.length).toBe(1);
+            expect(result.messages[0]!.text).toBe("second");
+        }
+        a.close();
+        dave2.close();
+    });
+
+    test("inbox before register errs not_registered", async () => {
+        const a = await rawConnect(sockPath);
+        a.send({ type: "inbox" });
+        const reply = await a.next();
+        expect(reply.type).toBe("err");
+        if (reply.type === "err") expect(reply.code).toBe("not_registered");
+        a.close();
+    });
+
     test("broadcast with exclude_self=false and one peer round-trips to self", async () => {
         const a = await rawConnect(sockPath);
         a.send({
@@ -775,5 +954,134 @@ describe("hub handlers", () => {
         }
 
         a.close();
+    });
+});
+
+// ─── Verifier unit tests ───────────────────────────────────────────────────────
+
+describe("handleSend unit — Verifier", () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-handler-unit-"));
+    });
+
+    afterEach(() => {
+        fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    // [VT5] handleSend: peer is online but sendTo returns false → status must be "queued"
+    test("[VT5] handleSend with online peer but failed sendTo → status queued not delivered", () => {
+        const mailboxes = createMailboxStore(dir);
+        let sentResult: Record<string, unknown> | null = null;
+
+        const ctx: HubContext = {
+            registry: {
+                getName: (_socket: net.Socket) => "alice",
+                hasName: (name: string) => name === "bob",
+            } as unknown as PeerRegistry,
+            pendingAsks: {} as HubContext["pendingAsks"],
+            defaultAskTimeoutMs: 5000,
+            sendTo: () => false, // peer "online" but push fails
+            groups: {} as HubContext["groups"],
+            mailboxes,
+        };
+
+        const mockSocket = {} as net.Socket;
+        handleSend(ctx, mockSocket, { type: "send", to: "bob", text: "hi" }, (m) => {
+            sentResult = m as Record<string, unknown>;
+        });
+
+        expect(sentResult).not.toBeNull();
+        expect(sentResult!["type"]).toBe("send_ack");
+        expect(sentResult!["status"]).toBe("queued");
+        // message was still persisted to mailbox despite failed push
+        const data = mailboxes.load("bob")!;
+        expect(data.messages.length).toBe(1);
+        expect(data.messages[0]!.text).toBe("hi");
+    });
+
+    // [VT6] handleSend: peer is online and sendTo returns true → status "delivered"
+    test("[VT6] handleSend with online peer and successful sendTo → status delivered", () => {
+        const mailboxes = createMailboxStore(dir);
+        let sentResult: Record<string, unknown> | null = null;
+
+        const ctx: HubContext = {
+            registry: {
+                getName: (_socket: net.Socket) => "alice",
+                hasName: (name: string) => name === "bob",
+            } as unknown as PeerRegistry,
+            pendingAsks: {} as HubContext["pendingAsks"],
+            defaultAskTimeoutMs: 5000,
+            sendTo: () => true, // push succeeds
+            groups: {} as HubContext["groups"],
+            mailboxes,
+        };
+
+        const mockSocket = {} as net.Socket;
+        handleSend(ctx, mockSocket, { type: "send", to: "bob", text: "hi" }, (m) => {
+            sentResult = m as Record<string, unknown>;
+        });
+
+        expect(sentResult!["type"]).toBe("send_ack");
+        expect(sentResult!["status"]).toBe("delivered");
+    });
+
+    // [VT7] handleSend: urgent=true → incoming_message carries urgent=true
+    test("[VT7] handleSend with urgent=true → incoming_message has urgent=true", () => {
+        const mailboxes = createMailboxStore(dir);
+        let pushed: Record<string, unknown> | null = null;
+
+        const ctx: HubContext = {
+            registry: {
+                getName: (_socket: net.Socket) => "alice",
+                hasName: (name: string) => name === "bob",
+            } as unknown as PeerRegistry,
+            pendingAsks: {} as HubContext["pendingAsks"],
+            defaultAskTimeoutMs: 5000,
+            sendTo: (_name: string, msg: unknown) => {
+                pushed = msg as Record<string, unknown>;
+                return true;
+            },
+            groups: {} as HubContext["groups"],
+            mailboxes,
+        };
+
+        const mockSocket = {} as net.Socket;
+        handleSend(ctx, mockSocket, { type: "send", to: "bob", text: "NOW", urgent: true }, (m) => {
+            void m;
+        });
+
+        expect(pushed).not.toBeNull();
+        expect(pushed!["type"]).toBe("incoming_message");
+        expect(pushed!["urgent"]).toBe(true);
+        const data = mailboxes.load("bob")!;
+        expect(data.messages[0]!.urgent).toBe(true);
+    });
+
+    // [VT8] handleSend: urgent absent → incoming_message has no urgent field
+    test("[VT8] handleSend without urgent → incoming_message has no urgent field", () => {
+        const mailboxes = createMailboxStore(dir);
+        let pushed: Record<string, unknown> | null = null;
+
+        const ctx: HubContext = {
+            registry: {
+                getName: (_socket: net.Socket) => "alice",
+                hasName: (name: string) => name === "bob",
+            } as unknown as PeerRegistry,
+            pendingAsks: {} as HubContext["pendingAsks"],
+            defaultAskTimeoutMs: 5000,
+            sendTo: (_name: string, msg: unknown) => {
+                pushed = msg as Record<string, unknown>;
+                return true;
+            },
+            groups: {} as HubContext["groups"],
+            mailboxes,
+        };
+
+        const mockSocket = {} as net.Socket;
+        handleSend(ctx, mockSocket, { type: "send", to: "bob", text: "normal" }, (_m) => {});
+
+        expect(pushed!["urgent"]).toBeUndefined();
     });
 });

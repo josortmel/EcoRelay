@@ -3,7 +3,15 @@ import { MAX_TEXT_LEN, PROTOCOL_VERSION, type ServerMsg } from "../protocol";
 import type { HubConnection } from "./hub-connection";
 import { createPendingBroadcasts } from "./pending-broadcasts";
 import { rawConnect, startCh, tmpSocket, waitForNotif } from "./test-helpers";
-import { relayAsk, relayBroadcast, relayReply, relayRoomMsg, type ChannelContext } from "./tools";
+import {
+    relayAsk,
+    relayBroadcast,
+    relayInbox,
+    relayReply,
+    relayRoomMsg,
+    relaySend,
+    type ChannelContext,
+} from "./tools";
 
 type RecordedSend = { type: "send"; payload: unknown };
 
@@ -577,5 +585,79 @@ describe("channel tools", () => {
         expect(result.isError).toBe(true);
         expect(JSON.parse(result.content[0]!.text)).toEqual({ ok: false, code: "bad_args" });
         expect(sends).toEqual([]);
+    });
+
+    // [VT1] relay_send: reply_to > 256 chars → bad_args, no hub send
+    test("[VT1] relay_send returns bad_args when reply_to exceeds 256 chars", async () => {
+        const { hub, sends } = makeFakeHub();
+        const ctx = makeCtx(hub);
+        const result = await relaySend(ctx, {
+            to: "bob",
+            text: "hello",
+            reply_to: "r".repeat(257),
+        });
+        expect(result.isError).toBe(true);
+        expect(JSON.parse(result.content[0]!.text)).toEqual({ ok: false, code: "bad_args" });
+        expect(sends).toEqual([]);
+    });
+
+    // [VT2] relay_send: reply_to at exactly 256 chars → accepted, sends to hub
+    test("[VT2] relay_send accepts reply_to at exactly 256 chars", async () => {
+        const { hub } = makeFakeHub();
+        const ctx = makeCtx(hub);
+        const result = await relaySend(ctx, {
+            to: "bob",
+            text: "hello",
+            reply_to: "r".repeat(256),
+        });
+        // makeFakeHub sendRequest returns { type: "ack" } — not send_ack, so result is err "unexpected"
+        // but the point is it didn't early-return bad_args
+        const parsed = JSON.parse(result.content[0]!.text);
+        expect(parsed.code).not.toBe("bad_args");
+    });
+
+    // [VT3] relay_inbox: since_id > 64 chars → bad_args
+    test("[VT3] relay_inbox returns bad_args when since_id exceeds 64 chars", async () => {
+        const { hub } = makeFakeHub();
+        const ctx = makeCtx(hub);
+        const result = await relayInbox(ctx, { since_id: "x".repeat(65) });
+        expect(result.isError).toBe(true);
+        expect(JSON.parse(result.content[0]!.text)).toEqual({ ok: false, code: "bad_args" });
+    });
+
+    // [VT4] relay_inbox: since_id at exactly 64 chars → accepted (not bad_args)
+    test("[VT4] relay_inbox accepts since_id at exactly 64 chars", async () => {
+        const { hub } = makeFakeHub();
+        const ctx = makeCtx(hub);
+        const result = await relayInbox(ctx, { since_id: "x".repeat(64) });
+        const parsed = JSON.parse(result.content[0]!.text);
+        expect(parsed.code).not.toBe("bad_args");
+    });
+
+    // [VT9] relay_send: urgent=true forwarded to hub
+    test("[VT9] relaySend with urgent=true — hub receives urgent=true", async () => {
+        const { hub } = makeFakeHub();
+        let captured: unknown;
+        hub.sendRequest = async (msg: unknown) => {
+            captured = msg;
+            return { type: "send_ack", msg_id: "m1", status: "delivered" } as ServerMsg;
+        };
+        const ctx = makeCtx(hub);
+        const result = await relaySend(ctx, { to: "bob", text: "NOW", urgent: true });
+        expect(result.isError).toBeUndefined();
+        expect((captured as Record<string, unknown>).urgent).toBe(true);
+    });
+
+    // [VT10] relay_send: urgent absent — not forwarded to hub
+    test("[VT10] relaySend without urgent — hub receives no urgent field", async () => {
+        const { hub } = makeFakeHub();
+        let captured: unknown;
+        hub.sendRequest = async (msg: unknown) => {
+            captured = msg;
+            return { type: "send_ack", msg_id: "m2", status: "queued" } as ServerMsg;
+        };
+        const ctx = makeCtx(hub);
+        await relaySend(ctx, { to: "bob", text: "normal" });
+        expect((captured as Record<string, unknown>).urgent).toBeUndefined();
     });
 });

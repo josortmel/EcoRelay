@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { hubSocketPath } from "./data-dir";
 
-export const PROTOCOL_VERSION = "4";
+export const PROTOCOL_VERSION = "5";
 
 // 512 KiB body cap leaves headroom under the 1 MiB framing.MAX_LINE_LEN for JSON envelope and escapes.
 export const MAX_TEXT_LEN = 512 * 1024;
@@ -128,6 +128,22 @@ export const GroupDeleteMsg = z.object({
     req_id: z.string().optional(),
 });
 
+export const SendMsg = z.object({
+    type: z.literal("send"),
+    to: z.string().max(64),
+    text: z.string().max(MAX_TEXT_LEN),
+    reply_to: z.string().max(256).optional(), // FIX 7
+    req_id: z.string().max(64).optional(), // FIX 8
+    urgent: z.boolean().optional(),
+});
+
+export const InboxMsg = z.object({
+    type: z.literal("inbox"),
+    limit: z.number().min(1).max(100).optional(),
+    since_id: z.string().max(64).optional(), // FIX 8
+    req_id: z.string().max(64).optional(), // FIX 8
+});
+
 export const ClientMsgSchema = z.discriminatedUnion("type", [
     RegisterMsg,
     RenameMsg,
@@ -149,6 +165,8 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
     GroupListMsg,
     GroupInfoMsg,
     GroupDeleteMsg,
+    SendMsg,
+    InboxMsg,
 ]);
 
 export const AckMsg = z.object({
@@ -172,6 +190,7 @@ export const ErrCodeSchema = z.enum([
     "not_member",
     "not_admin",
     "group_not_found",
+    "mailbox_error",
 ]);
 
 export type ErrCode = z.infer<typeof ErrCodeSchema>;
@@ -307,6 +326,39 @@ export const IncomingGroupMsgMsg = z.object({
     ts: z.string(),
 });
 
+export const SendAckMsg = z.object({
+    type: z.literal("send_ack"),
+    msg_id: z.string(),
+    status: z.enum(["delivered", "queued"]),
+    req_id: z.string().optional(),
+});
+
+export const InboxResultMsg = z.object({
+    type: z.literal("inbox_result"),
+    messages: z.array(
+        z.object({
+            msg_id: z.string(),
+            from: z.string(),
+            text: z.string(),
+            reply_to: z.string().max(256).nullable(), // FIX 7
+            ts: z.string(),
+            urgent: z.boolean().optional(),
+        }),
+    ),
+    remaining: z.number(),
+    req_id: z.string().optional(),
+});
+
+export const IncomingMessageMsg = z.object({
+    type: z.literal("incoming_message"),
+    msg_id: z.string(),
+    from: z.string(),
+    text: z.string().max(MAX_TEXT_LEN),
+    reply_to: z.string().max(256).nullable(), // FIX 7
+    ts: z.string(),
+    urgent: z.boolean().optional(),
+});
+
 // --- Bridge (hub-to-hub) messages ---
 
 export const BridgeHelloMsg = z.object({
@@ -364,6 +416,9 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
     GroupListResultMsg,
     GroupInfoResultMsg,
     IncomingGroupMsgMsg,
+    SendAckMsg,
+    InboxResultMsg,
+    IncomingMessageMsg,
 ]);
 
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;

@@ -15,6 +15,7 @@ import {
     type GroupListMsg,
     type GroupRemoveMsg,
     type GroupSendMsg,
+    type InboxMsg,
     type JoinRoomMsg,
     type LeaveRoomMsg,
     type ListPeersMsg,
@@ -23,9 +24,11 @@ import {
     type RenameMsg,
     type ReplyMsg,
     type RoomMsgMsg,
+    type SendMsg,
     type ServerMsg,
 } from "../protocol";
 import type { GroupStore } from "./groups";
+import type { MailboxStore } from "./mailbox";
 import type { PendingAsks } from "./pending-asks";
 import type { PeerRegistry } from "./registry";
 
@@ -42,6 +45,7 @@ export type HubContext = {
     defaultAskTimeoutMs: number;
     sendTo: (name: string, msg: ServerMsg) => boolean;
     groups: GroupStore;
+    mailboxes: MailboxStore;
     onLocalPeerJoin?: (name: string) => void;
 };
 
@@ -61,11 +65,16 @@ export async function handleRegister(
         });
         return send({ type: "err", code: "protocol_mismatch" });
     }
-    const result = await ctx.registry.register(socket, msg);
+    const name = sanitizeSessionName(msg.name); // FIX 1
+    if (!name) {
+        send({ type: "err", code: "bad_args" });
+        return;
+    }
+    const result = await ctx.registry.register(socket, { ...msg, name });
     if (result === "already_registered") return send({ type: "err", code: "already_registered" });
     if (result === "name_taken") return send({ type: "err", code: "name_taken" });
     send({ type: "ack" });
-    ctx.onLocalPeerJoin?.(msg.name);
+    ctx.onLocalPeerJoin?.(name);
 }
 
 export function handleRename(
@@ -802,4 +811,127 @@ export function handleGroupDelete(
     }
     ctx.groups.deleteGroup(sanitized);
     send({ type: "group_ack", ...(msg.req_id ? { req_id: msg.req_id } : {}) });
+}
+
+export function handleSend(
+    ctx: HubContext,
+    socket: net.Socket,
+    msg: z.infer<typeof SendMsg>,
+    send: Send,
+): void {
+    const caller = ctx.registry.getName(socket);
+    if (!caller) {
+        return send({
+            type: "err",
+            code: "not_registered",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+    const to = sanitizeSessionName(msg.to);
+    if (!to) {
+        return send({
+            type: "err",
+            code: "bad_args",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+
+    let result; // FIX 13
+    try {
+        result = ctx.mailboxes.addMessage(
+            to,
+            caller,
+            msg.text,
+            msg.reply_to ?? null,
+            msg.urgent ?? false,
+        );
+    } catch (e) {
+        log.error("mailbox_write_error", { to, err: e instanceof Error ? e.message : String(e) });
+        return send({
+            type: "err",
+            code: "mailbox_error",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+    if (!result) {
+        // FIX 6
+        return send({
+            type: "err",
+            code: "mailbox_error",
+            message: "mailbox limit exceeded",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+    const { message } = result;
+
+    let status: "delivered" | "queued" = "queued"; // FIX 5
+    const isOnline = ctx.registry.hasName(to);
+    if (isOnline) {
+        const pushed = ctx.sendTo(to, {
+            type: "incoming_message",
+            msg_id: message.msg_id,
+            from: caller,
+            text: msg.text,
+            reply_to: message.reply_to,
+            ts: message.ts,
+            ...(msg.urgent ? { urgent: true } : {}),
+        });
+        if (pushed) status = "delivered";
+    }
+
+    send({
+        type: "send_ack",
+        msg_id: message.msg_id,
+        status,
+        ...(msg.req_id ? { req_id: msg.req_id } : {}),
+    });
+    log.debug("send_processed", {
+        from: caller,
+        to,
+        msg_id: message.msg_id,
+        status,
+        urgent: msg.urgent ?? false,
+    });
+}
+
+export function handleInbox(
+    ctx: HubContext,
+    socket: net.Socket,
+    msg: z.infer<typeof InboxMsg>,
+    send: Send,
+): void {
+    const caller = ctx.registry.getName(socket);
+    if (!caller) {
+        return send({
+            type: "err",
+            code: "not_registered",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+
+    const limit = msg.limit ?? 20;
+    let messages: ReturnType<typeof ctx.mailboxes.getMessages>["messages"];
+    let remaining: number;
+    try {
+        // FIX 13
+        ({ messages, remaining } = ctx.mailboxes.getMessages(caller, msg.since_id, limit));
+    } catch (e) {
+        log.error("mailbox_read_error", {
+            caller,
+            err: e instanceof Error ? e.message : String(e),
+        });
+        return send({
+            type: "err",
+            code: "mailbox_error",
+            ...(msg.req_id ? { req_id: msg.req_id } : {}),
+        });
+    }
+
+    send({
+        type: "inbox_result",
+        messages,
+        remaining,
+        ...(msg.req_id ? { req_id: msg.req_id } : {}),
+    });
+    log.debug("inbox_polled", { caller, returned: messages.length, remaining }); // FIX 11
 }

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
-import { groupsDir } from "../data-dir";
+import { dataDir, groupsDir } from "../data-dir";
 import { readLines, writeLine } from "../framing";
 import { makeLogger } from "../logger";
 import { ClientMsgSchema, ServerMsgSchema, type ServerMsg } from "../protocol";
@@ -20,6 +20,7 @@ import {
     handleGroupList,
     handleGroupRemove,
     handleGroupSend,
+    handleInbox,
     handleJoinRoom,
     handleLeaveRoom,
     handleListPeers,
@@ -28,8 +29,10 @@ import {
     handleRename,
     handleReply,
     handleRoomMsg,
+    handleSend,
     type HubContext,
 } from "./handlers";
+import { createMailboxStore } from "./mailbox";
 import { createPendingAsks, type PendingAsk } from "./pending-asks";
 import { createPeerRegistry } from "./registry";
 import { listenWithRecovery } from "./socket-recovery";
@@ -71,6 +74,7 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
     const registry = createPeerRegistry();
     const pendingAsks = createPendingAsks(opts.pendingAsks);
     const groups = createGroupStore(groupsDir());
+    const mailboxes = createMailboxStore(path.join(dataDir(), "mailboxes"));
 
     const bridgeConfig = loadBridgeConfig();
     const bridge: Bridge | null = bridgeConfig ? createBridge(bridgeConfig, registry) : null;
@@ -135,6 +139,7 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
         defaultAskTimeoutMs,
         sendTo,
         groups,
+        mailboxes,
         onLocalPeerJoin: bridge
             ? (name: string) => {
                   const entry = registry.list().find((p) => p.name === name);
@@ -221,6 +226,10 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                     return handleGroupInfo(ctx, socket, msg, send);
                 case "group_delete":
                     return handleGroupDelete(ctx, socket, msg, send);
+                case "send":
+                    return handleSend(ctx, socket, msg, send);
+                case "inbox":
+                    return handleInbox(ctx, socket, msg, send);
                 case "pong":
                     return ctx.registry.handlePong(msg.req_id);
             }
