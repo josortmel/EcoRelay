@@ -1,7 +1,7 @@
 {
     "name": "relay",
-    "version": "0.5.0",
-    "description": "Inter-session communication for AI coding assistants. Direct messaging, persistent groups, and cross-machine LAN federation.",
+    "version": "0.7.0",
+    "description": "Inter-session communication for AI coding assistants. Direct messaging, persistent groups, cross-machine federation, and WebSocket relay.",
     "author": {
         "name": "Eco Consulting",
         "url": "https://github.com/EcoConsulting"
