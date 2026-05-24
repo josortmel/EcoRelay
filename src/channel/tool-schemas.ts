@@ -261,7 +261,7 @@ export const TOOLS: ToolSchema[] = [
                     type: "string",
                     maxLength: 256,
                     description: "Optional msg_id of the message you are replying to",
-                }, // FIX 7
+                },
                 urgent: {
                     type: "boolean",
                     description:
@@ -286,7 +286,7 @@ export const TOOLS: ToolSchema[] = [
                     type: "string",
                     maxLength: 64,
                     description: "Only return messages after this msg_id",
-                }, // FIX 8
+                },
             },
         },
     },

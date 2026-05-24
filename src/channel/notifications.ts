@@ -88,7 +88,7 @@ export function buildMessageNotification(
     };
     if (msg.reply_to) meta.reply_to = msg.reply_to;
     if (originHub) meta.origin_hub = originHub;
-    meta.ts = msg.ts; // FIX 12
-    if (msg.urgent) meta.urgent = true;
+    meta.ts = msg.ts;
+    if (msg.urgent) meta.urgent = "true";
     return { method: METHOD, params: { content: msg.text, meta } };
 }

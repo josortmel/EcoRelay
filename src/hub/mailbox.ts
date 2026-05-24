@@ -22,10 +22,9 @@ type MailboxData = {
 export type MailboxStore = ReturnType<typeof createMailboxStore>;
 
 export function createMailboxStore(dir: string) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); // FIX 9
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
     function filePath(owner: string): string {
-        // FIX 4
         const base = path.basename(owner);
         if (!base || base === "." || base === ".." || base !== owner)
             throw new Error(`invalid mailbox owner: ${owner}`);
@@ -56,7 +55,6 @@ export function createMailboxStore(dir: string) {
     }
 
     function totalMailboxCount(): number {
-        // FIX 6
         try {
             return fs.readdirSync(dir).filter((f) => f.endsWith(".json")).length;
         } catch {
@@ -71,7 +69,6 @@ export function createMailboxStore(dir: string) {
         replyTo: string | null = null,
         urgent: boolean = false,
     ): { data: MailboxData; message: MailboxMessage } | null {
-        // FIX 6
         const existing = load(owner);
         if (!existing && totalMailboxCount() >= MAX_MAILBOXES) {
             return null;
@@ -101,7 +98,7 @@ export function createMailboxStore(dir: string) {
 
         if (sinceId !== undefined) {
             const idx = data.messages.findIndex((m) => m.msg_id === sinceId);
-            unread = idx === -1 ? data.messages.slice() : data.messages.slice(idx + 1); // FIX 3
+            unread = idx === -1 ? data.messages.slice() : data.messages.slice(idx + 1);
         } else if (data.last_read !== null) {
             const idx = data.messages.findIndex((m) => m.msg_id === data.last_read);
             unread = idx === -1 ? data.messages.slice() : data.messages.slice(idx + 1);

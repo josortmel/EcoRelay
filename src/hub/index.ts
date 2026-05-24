@@ -114,22 +114,7 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                 return false;
             }
         }
-        if (bridge) {
-            const route = bridge.getRoute(name);
-            if (route) {
-                try {
-                    writeLine(route.socket, {
-                        type: "bridge_forward",
-                        target_peer: route.localName,
-                        origin_hub: bridge.hubId,
-                        wrapped: msg,
-                    });
-                    return true;
-                } catch {
-                    return false;
-                }
-            }
-        }
+        if (bridge) return bridge.sendForward(name, msg);
         return false;
     };
 
@@ -144,14 +129,11 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
             ? (name: string) => {
                   const entry = registry.list().find((p) => p.name === name);
                   if (!entry) return;
-                  if (!bridge) return;
-                  for (const [hubId] of bridge.connections) {
-                      bridge.sendBridgeMsg(hubId, {
-                          type: "bridge_peer_update",
-                          action: "join",
-                          peer: entry,
-                      });
-                  }
+                  bridge.broadcastPeerUpdate({
+                      type: "bridge_peer_update",
+                      action: "join",
+                      peer: entry,
+                  });
               }
             : undefined,
     };
@@ -260,13 +242,11 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                     sendTo(caller, { type: "err", code: "peer_gone", ask_id: askId });
                 }
                 if (bridge && !name.includes("@")) {
-                    for (const [hubId] of bridge.connections) {
-                        bridge.sendBridgeMsg(hubId, {
-                            type: "bridge_peer_update",
-                            action: "leave",
-                            name,
-                        });
-                    }
+                    bridge.broadcastPeerUpdate({
+                        type: "bridge_peer_update",
+                        action: "leave",
+                        name,
+                    });
                 }
             }
             scheduleIdleTimerIfEmpty();

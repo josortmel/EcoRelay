@@ -829,3 +829,246 @@ describe("bridge integration — mid-ask timeout", () => {
         bob.close();
     }, 3000);
 });
+
+// ---------------------------------------------------------------------------
+// 7. WS relay bridge
+// ---------------------------------------------------------------------------
+
+import { startRelayServer } from "../relay-server/index";
+
+describe("bridge WS relay", () => {
+    const bridges: Array<ReturnType<typeof createBridge>> = [];
+    let relayServer: ReturnType<typeof startRelayServer> | null = null;
+    const RELAY_TOKEN = "relay-token-ok";
+
+    afterEach(async () => {
+        for (const b of bridges) await b.close();
+        bridges.length = 0;
+        relayServer?.stop();
+        relayServer = null;
+    });
+
+    async function startRelay(): Promise<ReturnType<typeof startRelayServer>> {
+        const port = await getFreePort();
+        const r = startRelayServer({
+            port,
+            secret: RELAY_TOKEN,
+            max_hubs: 50,
+            handshake_timeout_ms: 5000,
+        });
+        relayServer = r;
+        return r;
+    }
+
+    function makeRelayBridge(hubId: string, relayUrl: string, reg = createPeerRegistry()) {
+        const b = createBridge(
+            {
+                hub_id: hubId,
+                listen: 0,
+                secret: "local-secret",
+                peers: [],
+                relay: { url: relayUrl, token: RELAY_TOKEN },
+            },
+            reg,
+        );
+        bridges.push(b);
+        return { bridge: b, registry: reg };
+    }
+
+    // 1. WS relay connection + handshake
+    test("relay handshake: remote peers appear in registry", async () => {
+        const relay = await startRelay();
+        const regA = createPeerRegistry();
+        const regB = createPeerRegistry();
+
+        // Give bridge-b a local peer before connecting
+        const peerEntry = { name: "bob", cwd: "/bob", git_branch: "main", last_seen: 0 };
+        regB.addRemotePeer("__local__", peerEntry); // just to set up state
+        // Use a hub with an initial peer by connecting with peers in bridge_hello
+        // Actually create the bridges and connect
+        const url = `ws://127.0.0.1:${relay.port}`;
+        const { bridge: bridgeA } = makeRelayBridge("hub-a", url, regA);
+        const { bridge: bridgeB } = makeRelayBridge("hub-b", url, regB);
+
+        bridgeA.connectToAllPeers();
+        bridgeB.connectToAllPeers();
+
+        await waitFor(() => bridgeA.relayConnected && bridgeB.relayConnected);
+        expect(bridgeA.relayConnected).toBe(true);
+        expect(bridgeB.relayConnected).toBe(true);
+    });
+
+    // 2. bridge_forward routing via WS relay
+    test("bridge_forward routes through relay to correct hub", async () => {
+        const relay = await startRelay();
+        const url = `ws://127.0.0.1:${relay.port}`;
+        const regA = createPeerRegistry();
+        const regB = createPeerRegistry();
+
+        const { bridge: bridgeA } = makeRelayBridge("hub-a", url, regA);
+        const { bridge: bridgeB } = makeRelayBridge("hub-b", url, regB);
+
+        const received: Array<{ target_peer: string; origin_hub: string }> = [];
+        bridgeB.setForwardHandler((fwd) =>
+            received.push({ target_peer: fwd.target_peer, origin_hub: fwd.origin_hub }),
+        );
+
+        bridgeA.connectToAllPeers();
+        bridgeB.connectToAllPeers();
+
+        // Wait for relay handshakes and peer sync (hub-b registers "alice")
+        await waitFor(() => bridgeA.relayConnected && bridgeB.relayConnected);
+
+        // Manually add alice as a remote peer known to hub-a (simulates prior peer update)
+        regA.addRemotePeer("hub-b", {
+            name: "alice",
+            cwd: "/alice",
+            git_branch: "main",
+            last_seen: 0,
+        });
+
+        // hub-a sends forward to alice@hub-b via relay
+        const ok = bridgeA.sendForward("alice@hub-b", {
+            type: "incoming_ask",
+            from: "bob@hub-a",
+            question: "hello?",
+            ask_id: "ask-1",
+        });
+        expect(ok).toBe(true);
+
+        await waitFor(() => received.length > 0);
+        expect(received[0]!.target_peer).toBe("alice");
+        expect(received[0]!.origin_hub).toBe("hub-a");
+    });
+
+    // 3. Peer update via WS relay
+    test("peer update via relay: new peer appears in remote registry", async () => {
+        const relay = await startRelay();
+        const url = `ws://127.0.0.1:${relay.port}`;
+        const regA = createPeerRegistry();
+        const regB = createPeerRegistry();
+
+        const { bridge: bridgeA } = makeRelayBridge("hub-a", url, regA);
+        const { bridge: bridgeB } = makeRelayBridge("hub-b", url, regB);
+
+        bridgeA.connectToAllPeers();
+        bridgeB.connectToAllPeers();
+        await waitFor(() => bridgeA.relayConnected && bridgeB.relayConnected);
+
+        // hub-b broadcasts that "carol" joined
+        bridgeB.broadcastPeerUpdate({
+            type: "bridge_peer_update",
+            action: "join",
+            peer: { name: "carol", cwd: "/carol", git_branch: "main", last_seen: 0 },
+        });
+
+        // hub-a should eventually see carol@hub-b in its registry
+        await waitFor(() => regA.hasRemotePeer("carol@hub-b"));
+        expect(regA.hasRemotePeer("carol@hub-b")).toBe(true);
+    });
+
+    // 4. WS reconnection on close with backoff + peer cleanup
+    test("relay disconnect: remote peers cleaned up, onBridgeDisconnect fires", async () => {
+        const relay = await startRelay();
+        const url = `ws://127.0.0.1:${relay.port}`;
+        const regA = createPeerRegistry();
+        const regB = createPeerRegistry();
+
+        const { bridge: bridgeA } = makeRelayBridge("hub-a", url, regA);
+        const { bridge: bridgeB } = makeRelayBridge("hub-b", url, regB);
+
+        const disconnectedHubs: string[] = [];
+        bridgeA.setOnBridgeDisconnect((hubId) => disconnectedHubs.push(hubId));
+
+        bridgeA.connectToAllPeers();
+        bridgeB.connectToAllPeers();
+        await waitFor(() => bridgeA.relayConnected && bridgeB.relayConnected);
+
+        // hub-b announces a peer so hub-a has something in its registry
+        bridgeB.broadcastPeerUpdate({
+            type: "bridge_peer_update",
+            action: "join",
+            peer: { name: "dave", cwd: "/dave", git_branch: "main", last_seen: 0 },
+        });
+        await waitFor(() => regA.hasRemotePeer("dave@hub-b"));
+
+        // Stop the relay — hub-a loses its relay connection
+        relay.stop();
+        relayServer = null;
+
+        await waitFor(() => !bridgeA.relayConnected);
+        expect(regA.hasRemotePeer("dave@hub-b")).toBe(false);
+        expect(disconnectedHubs).toContain("hub-b");
+    });
+
+    // 5. TCP + WS coexistence
+    test("TCP direct and WS relay coexist: peers visible via both paths", async () => {
+        const relay = await startRelay();
+        const url = `ws://127.0.0.1:${relay.port}`;
+
+        // hub-c connects via relay only (no TCP)
+        const portB = await getFreePort();
+        const regA = createPeerRegistry();
+        const regB = createPeerRegistry();
+        const regC = createPeerRegistry();
+
+        // hub-b: listens on TCP, also connects to relay
+        const bridgeB = createBridge(
+            {
+                hub_id: "hub-b",
+                listen: portB,
+                secret: "tcp-secret",
+                peers: [],
+                relay: { url, token: RELAY_TOKEN },
+            },
+            regB,
+        );
+        bridges.push(bridgeB);
+
+        // hub-a: connects to hub-b via TCP, also connects to relay
+        const bridgeA = createBridge(
+            {
+                hub_id: "hub-a",
+                listen: 0,
+                secret: "tcp-secret",
+                peers: [{ hub_id: "hub-b", host: "127.0.0.1", port: portB }],
+                relay: { url, token: RELAY_TOKEN },
+            },
+            regA,
+        );
+        bridges.push(bridgeA);
+
+        // hub-c: relay only
+        const { bridge: bridgeC } = makeRelayBridge("hub-c", url, regC);
+
+        bridgeB.listen();
+        bridgeA.connectToAllPeers();
+        bridgeB.connectToAllPeers();
+        bridgeC.connectToAllPeers();
+
+        await waitFor(
+            () =>
+                bridgeA.connections.has("hub-b") &&
+                bridgeA.relayConnected &&
+                bridgeC.relayConnected,
+        );
+
+        // Simulate hub-c broadcasting a peer so hub-a sees it via relay
+        bridgeC.broadcastPeerUpdate({
+            type: "bridge_peer_update",
+            action: "join",
+            peer: { name: "eve", cwd: "/eve", git_branch: "main", last_seen: 0 },
+        });
+
+        // hub-b broadcasts a peer so hub-a sees it via TCP
+        bridgeB.broadcastPeerUpdate({
+            type: "bridge_peer_update",
+            action: "join",
+            peer: { name: "frank", cwd: "/frank", git_branch: "main", last_seen: 0 },
+        });
+
+        await waitFor(() => regA.hasRemotePeer("eve@hub-c") && regA.hasRemotePeer("frank@hub-b"));
+        expect(regA.hasRemotePeer("eve@hub-c")).toBe(true);
+        expect(regA.hasRemotePeer("frank@hub-b")).toBe(true);
+    });
+});

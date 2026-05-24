@@ -1,0 +1,4 @@
+{
+    "port": 9800,
+    "secret": "change-me-min-8-chars"
+}

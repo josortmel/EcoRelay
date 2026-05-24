@@ -23,9 +23,11 @@ type GroupData = {
 export type GroupStore = ReturnType<typeof createGroupStore>;
 
 export function createGroupStore(dir: string) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
     function filePath(name: string): string {
+        const base = path.basename(name);
+        if (!base || base !== name) throw new Error(`invalid group name: ${name}`);
         return path.join(dir, `${name}.json`);
     }
 

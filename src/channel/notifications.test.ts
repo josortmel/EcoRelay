@@ -150,7 +150,7 @@ describe("channel notifications", () => {
             ts: "2026-01-01T00:00:00.000Z",
             urgent: true,
         });
-        expect(notif.params.meta.urgent).toBe(true);
+        expect(notif.params.meta.urgent).toBe("true");
     });
 
     test("buildMessageNotification urgent absent — meta has no urgent", () => {

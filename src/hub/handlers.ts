@@ -836,7 +836,7 @@ export function handleSend(
         });
     }
 
-    let result; // FIX 13
+    let result;
     try {
         result = ctx.mailboxes.addMessage(
             to,
@@ -854,7 +854,6 @@ export function handleSend(
         });
     }
     if (!result) {
-        // FIX 6
         return send({
             type: "err",
             code: "mailbox_error",
@@ -864,7 +863,7 @@ export function handleSend(
     }
     const { message } = result;
 
-    let status: "delivered" | "queued" = "queued"; // FIX 5
+    let status: "delivered" | "queued" = "queued";
     const isOnline = ctx.registry.hasName(to);
     if (isOnline) {
         const pushed = ctx.sendTo(to, {
@@ -913,7 +912,6 @@ export function handleInbox(
     let messages: ReturnType<typeof ctx.mailboxes.getMessages>["messages"];
     let remaining: number;
     try {
-        // FIX 13
         ({ messages, remaining } = ctx.mailboxes.getMessages(caller, msg.since_id, limit));
     } catch (e) {
         log.error("mailbox_read_error", {

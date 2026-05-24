@@ -1,0 +1,8 @@
+{
+    "hub_id": "my-hub-name",
+    "secret": "local-lan-secret-if-needed",
+    "relay": {
+        "url": "ws://relay-server-ip:9800",
+        "token": "same-secret-as-relay-config"
+    }
+}

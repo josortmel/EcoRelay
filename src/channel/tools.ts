@@ -329,7 +329,7 @@ export async function relaySend(
     if (typeof to !== "string" || typeof text !== "string") return errResult("bad_args");
     if (text.length > MAX_TEXT_LEN) return errResult("bad_args");
     const replyTo = typeof args.reply_to === "string" ? args.reply_to : undefined;
-    if (replyTo && replyTo.length > 256) return errResult("bad_args"); // FIX 7
+    if (replyTo && replyTo.length > 256) return errResult("bad_args");
     const urgent = typeof args.urgent === "boolean" ? args.urgent : undefined;
     const reply = await ctx.getHub().sendRequest(
         {
@@ -338,7 +338,7 @@ export async function relaySend(
             text,
             ...(replyTo !== undefined ? { reply_to: replyTo } : {}),
             ...(urgent ? { urgent: true } : {}),
-        }, // FIX 10
+        },
         ctx.requestTimeoutMs,
     );
     if (reply.type === "send_ack") {
@@ -354,13 +354,13 @@ export async function relayInbox(
     const limit = typeof args.limit === "number" ? args.limit : undefined;
     const sinceId = typeof args.since_id === "string" ? args.since_id : undefined;
     if (sinceId !== undefined && (sinceId.length === 0 || sinceId.length > 64))
-        return errResult("bad_args"); // FIX 8
+        return errResult("bad_args");
     const reply = await ctx.getHub().sendRequest(
         {
             type: "inbox",
             ...(limit !== undefined ? { limit } : {}),
             ...(sinceId !== undefined ? { since_id: sinceId } : {}),
-        }, // FIX 10
+        },
         ctx.requestTimeoutMs,
     );
     if (reply.type === "inbox_result") {

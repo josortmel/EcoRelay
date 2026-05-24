@@ -3,15 +3,13 @@ import { readLines, writeLine } from "../framing";
 import { makeLogger } from "../logger";
 import type { BridgeMsg, PeerRecord } from "../protocol";
 import { BridgeMsgSchema, PROTOCOL_VERSION } from "../protocol";
-import type { BridgeConfig, BridgePeerConfig } from "./bridge-config";
+import type { BridgeConfig, BridgePeerConfig, RelayConfig } from "./bridge-config";
 import type { PeerRegistry } from "./registry";
 
 const log = makeLogger("bridge");
 
 const HANDSHAKE_TIMEOUT_MS = 5000;
 const RETRY_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
-
-export type BridgeRoute = { socket: net.Socket; localName: string; hubId: string };
 
 export type Bridge = ReturnType<typeof createBridge>;
 
@@ -28,20 +26,16 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         | null = null;
     let onBridgeDisconnect: ((hubId: string) => void) | null = null;
 
+    // WS relay state
+    let relayWs: WebSocket | null = null;
+    const relayHubs = new Set<string>();
+
     function setOnBridgeDisconnect(handler: typeof onBridgeDisconnect) {
         onBridgeDisconnect = handler;
     }
 
     function setForwardHandler(handler: typeof onForward) {
         onForward = handler;
-    }
-
-    function getRoute(qualifiedName: string): BridgeRoute | undefined {
-        const remote = registry.getRemotePeer(qualifiedName);
-        if (!remote) return undefined;
-        const socket = connections.get(remote.hub_id);
-        if (!socket) return undefined;
-        return { socket, localName: remote.localName, hubId: remote.hub_id };
     }
 
     function handleBridgeMsg(msg: BridgeMsg, remoteHubId: string): void {
@@ -259,8 +253,197 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         });
     }
 
+    function connectToRelayWs(relayConfig: RelayConfig, attempt = 0): void {
+        if (stopped) return;
+
+        const ws = new WebSocket(relayConfig.url);
+        let handshakeDone = false;
+
+        const handshakeTimer = setTimeout(() => {
+            if (!handshakeDone) {
+                log.warn("relay_ws_handshake_timeout", { url: relayConfig.url });
+                ws.close();
+            }
+        }, HANDSHAKE_TIMEOUT_MS);
+
+        ws.onopen = () => {
+            ws.send(
+                JSON.stringify({
+                    type: "bridge_hello",
+                    hub_id: config.hub_id,
+                    secret: relayConfig.token,
+                    protocol_version: PROTOCOL_VERSION,
+                    peers: getLocalPeers(),
+                }),
+            );
+        };
+
+        ws.onmessage = (event) => {
+            const text =
+                typeof event.data === "string" ? event.data : (event.data as Buffer).toString();
+            let raw: unknown;
+            try {
+                raw = JSON.parse(text);
+            } catch {
+                return;
+            }
+            const parsed = BridgeMsgSchema.safeParse(raw);
+            if (!parsed.success) return;
+
+            if (!handshakeDone) {
+                clearTimeout(handshakeTimer);
+                if (parsed.data.type !== "bridge_welcome") {
+                    ws.close();
+                    return;
+                }
+                // Welcome peers are already qualified: "name@hub_id"
+                for (const peer of parsed.data.peers) {
+                    const atIdx = peer.name.indexOf("@");
+                    if (atIdx !== -1) {
+                        const remoteHub = peer.name.slice(atIdx + 1);
+                        const localPeer = { ...peer, name: peer.name.slice(0, atIdx) };
+                        if (!localPeer.name || localPeer.name.includes("@")) {
+                            log.warn("relay_invalid_peer_name", { raw: peer.name });
+                            continue;
+                        }
+                        registry.addRemotePeer(remoteHub, localPeer);
+                        relayHubs.add(remoteHub);
+                    }
+                }
+                relayWs = ws;
+                handshakeDone = true;
+                log.info("relay_ws_connected", { url: relayConfig.url });
+                return;
+            }
+
+            const msg = parsed.data;
+
+            if (msg.type === "bridge_peer_update") {
+                if (msg.action === "join" && msg.peer) {
+                    // Peer names from relay are always qualified: "name@hub_id"
+                    const atIdx = msg.peer.name.indexOf("@");
+                    if (atIdx !== -1) {
+                        const remoteHub = msg.peer.name.slice(atIdx + 1);
+                        const localPeer = { ...msg.peer, name: msg.peer.name.slice(0, atIdx) };
+                        if (!localPeer.name || localPeer.name.includes("@")) {
+                            log.warn("relay_invalid_peer_name", { raw: msg.peer.name });
+                            return;
+                        }
+                        registry.addRemotePeer(remoteHub, localPeer);
+                        relayHubs.add(remoteHub);
+                    }
+                } else if (msg.action === "leave" && msg.name) {
+                    const atIdx = msg.name.indexOf("@");
+                    if (atIdx !== -1) {
+                        const remoteHub = msg.name.slice(atIdx + 1);
+                        const localName = msg.name.slice(0, atIdx);
+                        registry.removeRemotePeer(remoteHub, localName);
+                    }
+                }
+                return;
+            }
+
+            if (msg.type === "bridge_forward") {
+                const originHub = msg.origin_hub;
+                if (!originHub) {
+                    log.warn("relay_forward_unknown_origin", { origin_hub: originHub });
+                    return;
+                }
+                // Relay is trusted; auto-discover peer-less hubs on first forward
+                if (!relayHubs.has(originHub)) relayHubs.add(originHub);
+                const atIdx = msg.target_peer.indexOf("@");
+                const localTarget =
+                    atIdx !== -1 ? msg.target_peer.slice(0, atIdx) : msg.target_peer;
+                if (onForward)
+                    onForward({
+                        target_peer: localTarget,
+                        origin_hub: originHub,
+                        wrapped: msg.wrapped,
+                    });
+                return;
+            }
+        };
+
+        ws.onclose = () => {
+            clearTimeout(handshakeTimer);
+            if (handshakeDone) {
+                relayWs = null;
+                for (const hubId of relayHubs) {
+                    registry.removeAllRemotePeersForHub(hubId);
+                    if (!stopped && onBridgeDisconnect) onBridgeDisconnect(hubId);
+                }
+                relayHubs.clear();
+                if (!stopped) log.info("relay_ws_disconnected", { url: relayConfig.url });
+            }
+            if (!stopped) {
+                const nextAttempt = handshakeDone ? 0 : attempt + 1;
+                const delay = RETRY_DELAYS[Math.min(nextAttempt, RETRY_DELAYS.length - 1)];
+                log.info("relay_ws_reconnect_scheduled", { delay_ms: delay, attempt: nextAttempt });
+                setTimeout(() => connectToRelayWs(relayConfig, nextAttempt), delay);
+            }
+        };
+
+        ws.onerror = (err) => {
+            log.warn("relay_ws_error", { url: relayConfig.url, err: String(err) });
+        };
+    }
+
+    // Send a bridge_forward for a remote peer, routing via TCP or relay WS as appropriate
+    function sendForward(qualifiedName: string, wrapped: unknown): boolean {
+        const remote = registry.getRemotePeer(qualifiedName);
+        if (!remote) return false;
+
+        const socket = connections.get(remote.hub_id);
+        if (socket) {
+            try {
+                writeLine(socket, {
+                    type: "bridge_forward",
+                    target_peer: remote.localName,
+                    origin_hub: config.hub_id,
+                    wrapped,
+                });
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        if (relayWs) {
+            try {
+                relayWs.send(
+                    JSON.stringify({
+                        type: "bridge_forward",
+                        target_peer: qualifiedName,
+                        origin_hub: config.hub_id,
+                        wrapped,
+                    }),
+                );
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    // Broadcast a peer update to all TCP connections and the relay WS
+    function broadcastPeerUpdate(msg: Record<string, unknown>): void {
+        for (const socket of connections.values()) {
+            try {
+                writeLine(socket, msg);
+            } catch {}
+        }
+        if (relayWs) {
+            try {
+                relayWs.send(JSON.stringify(msg));
+            } catch {}
+        }
+    }
+
     function connectToAllPeers(): void {
         for (const p of config.peers) connectToPeerWithRetry(p);
+        if (config.relay) connectToRelayWs(config.relay);
     }
 
     function sendBridgeMsg(hubId: string, msg: Record<string, unknown>): boolean {
@@ -278,6 +461,15 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         stopped = true;
         for (const s of connections.values()) s.destroy();
         connections.clear();
+        if (relayWs) {
+            for (const hubId of relayHubs) {
+                registry.removeAllRemotePeersForHub(hubId);
+                if (onBridgeDisconnect) onBridgeDisconnect(hubId);
+            }
+            relayHubs.clear();
+            relayWs.close();
+            relayWs = null;
+        }
         if (server) {
             const s = server;
             await new Promise<void>((resolve) => s.close(() => resolve()));
@@ -289,8 +481,9 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         listen,
         connectToAllPeers,
         connectToPeer: connectToPeerWithRetry,
-        getRoute,
         sendBridgeMsg,
+        sendForward,
+        broadcastPeerUpdate,
         setForwardHandler,
         setOnBridgeDisconnect,
         close,
@@ -299,6 +492,9 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         },
         get connections() {
             return connections;
+        },
+        get relayConnected() {
+            return relayWs !== null;
         },
     };
 }
