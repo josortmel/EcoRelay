@@ -4,42 +4,64 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
-## [0.6.0] — 2026-05-24
+## [0.7.0] — 2026-05-24
 
-Unified messaging: `relay_send` + `relay_inbox` replace request-response pattern with persistent, timeout-free messaging.
+Cross-network internet federation + unified messaging + security hardening. Two major versions in one release.
 
-### Added
+### Added — Cross-network federation (v0.7)
 
-- **`relay_send(to, text, reply_to?)`**: persistent direct messaging. Returns `{msg_id, status}` — "delivered" (peer online, push notification sent) or "queued" (peer offline, stored for retrieval). Messages persist to disk, no timeout. Use `reply_to` to reference a previous message.
+- **WebSocket relay server** (`src/relay-server/index.ts`): standalone Bun WebSocket server (~200 lines) that routes `bridge_forward` messages between hubs on different networks. All connections outbound — works behind NAT, firewalls, and proxies.
+- **Hub WS bridge client**: `connectToRelayWs` in `bridge.ts` connects to a relay server via WebSocket. Exponential backoff reconnect, qualified name routing, peer sync.
+- **`sendForward`**: unified function for routing bridge_forward via TCP (LAN) or WebSocket (internet). TCP first, relay fallback.
+- **`broadcastPeerUpdate`**: unified peer join/leave announcements to all TCP connections + relay WS.
+- **Bridge config**: `relay: { url, token }` optional field in `bridge.json`. TCP (`peers[]`) and WS (`relay`) coexist.
+- **Relay config examples**: `relay-config.example.json`, `bridge.example-remote.json`.
+- **Hub ID validation**: `/^[a-zA-Z0-9_-]+$/` regex enforced on relay handshake.
+- 14 new tests (9 relay server + 5 bridge WS). Total suite: 354.
+
+### Added — Unified messaging (v0.6)
+
+- **`relay_send(to, text, reply_to?, urgent?)`**: persistent direct messaging. Returns `{msg_id, status}` — "delivered" (peer online, push notification sent) or "queued" (peer offline, stored for retrieval). Messages persist to disk. `reply_to` for threading. `urgent` flag instructs recipient to act immediately.
 - **`relay_inbox(limit?, since_id?)`**: on-demand mailbox reader. Paginated, marks messages as read. Call at session start to check for offline messages.
 - **MailboxStore** (`src/hub/mailbox.ts`): per-peer JSON mailbox at `{dataDir}/mailboxes/`. Ring buffer (500 messages FIFO). Atomic writes via temp+rename.
 - **`incoming_message`** server→client notification: real-time push when recipient is online.
-- **Mailbox security**: path traversal protection (basename validation), directory permissions (0o700), MAX_MAILBOXES cap (500), reply_to/since_id/req_id length limits, mailbox I/O error handling.
-- 25+ new tests. Total suite: 320.
 
 ### Changed
 
 - `PROTOCOL_VERSION` bumped from `"4"` to `"5"`.
 - `relay_ask` description clarified: use for request-response; `relay_send` for fire-and-forget.
-- `relay_reply` description clarified: required for responding to `relay_ask`; `relay_send` with `reply_to` for responding to `relay_send`.
-- `buildMessageNotification` includes `ts` in notification meta.
+- **`relay_reply` smart fallback**: auto-detects whether the ID is an `ask_id` (from `relay_ask`) or `msg_id` (from `relay_send`). If `msg_id`, transparently converts to `relay_send(to=original_sender, reply_to=msg_id)`. Agents never need to know which protocol sent the original message.
 - `handleSend` captures `sendTo` return value — reports "queued" if push fails (honest delivery status).
+- `buildMessageNotification` includes `ts` in notification meta.
+- `generateMsgId` uses `crypto.randomUUID()` (replaces `Math.random` 4-char suffix).
+- `totalMailboxCount` uses in-memory counter (replaces `readdirSync` per send).
+- Dead code removed: `getRoute`, `BridgeRoute` type.
 
 ### Security
 
-- `handleRegister` now calls `sanitizeSessionName` on peer name (was the only handler without it — path traversal via registered name).
-- `reply_to` capped at 256 chars (prevents disk/memory exhaustion via oversized field).
-- `since_id` capped at 64 chars (prevents CPU DoS via string comparison).
-- `req_id` capped at 64 chars in SendMsg and InboxMsg.
-- Mailbox directory created with mode `0o700` (matches hub socket directory).
-- `MAX_MAILBOXES = 500` — caps total mailbox file count (prevents disk exhaustion).
-- `mailbox_error` code now live via try/catch in handleSend/handleInbox.
-- `filePath` rejects `.`, `..`, and path separator characters in owner name.
+- **`handleRegister`** now calls `sanitizeSessionName` on peer name (was the only handler without it — path traversal via registered name).
+- **Relay server**: `safeSend` wrapper for all WebSocket sends (prevents throw on CLOSING/CLOSED state). Handshake timer stored + cleared on auth success. HTTP health endpoint stripped to "OK" (no version/hub count disclosure).
+- **Secret comparison**: `crypto.timingSafeEqual` in relay server + TCP bridge listener (replaces `!==`).
+- **Origin validation**: WS relay path validates `origin_hub` exists in known `relayHubs` set before accepting `bridge_forward`.
+- **Peer name validation**: rejects empty names and names containing `@` from relay welcome/peer_update.
+- **Qualified name broadcast**: hello-path peer announcements now qualify names (`name@hub_id`) consistently with peer_update handler.
+- **Bridge close cleanup**: `removeAllRemotePeersForHub` + `onBridgeDisconnect` called per relay hub BEFORE clearing set.
+- **Groups hardened**: `groups.ts` directory created with mode `0o700` + `path.basename` defense-in-depth (parity with mailbox).
+- **Mailbox security**: path traversal protection (basename validation), directory permissions (0o700), MAX_MAILBOXES cap (500), `reply_to` max 256 chars, `since_id` max 64 chars, `req_id` max 64 chars, `to` max 64 chars, mailbox I/O error handling via try/catch.
+- `filePath` rejects `.`, `..`, and path separator characters in owner/group name.
+
+### Fixed
+
+- **Notification meta boolean crash**: `meta.urgent = true` (boolean) crashed Claude Code sessions. All notification meta values must be strings. Fixed: `meta.urgent = "true"`.
+- **relay_reply with msg_id**: agents receiving `incoming_message` (from `relay_send`) and calling `relay_reply` got `unknown_ask`. Fixed: channel tracks `msg_id→sender` mapping, auto-converts to `relay_send`.
 
 ### Protocol
 
 - 2 new client→hub: `SendMsg`, `InboxMsg`.
 - 3 new hub→client: `SendAckMsg`, `InboxResultMsg`, `IncomingMessageMsg`.
+- `BridgeHelloMsg`, `BridgeWelcomeMsg`: optional `public_key` field (reserved for E2E, not yet active).
+- `BridgeForwardMsg`: optional `encrypted`, `nonce` fields (reserved for E2E, not yet active).
+- `BridgeConfigSchema`: optional `relay: { url, token }` field.
 - New error code: `mailbox_error`.
 
 ## [0.5.0] — 2026-05-19
