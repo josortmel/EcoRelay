@@ -1,13 +1,13 @@
+import { hubSocketPath } from "./data-dir";
 import { startHub } from "./hub/index";
 import { initLogger, makeLogger } from "./logger";
-import { HUB_SOCKET_PATH } from "./protocol";
 
 const log = makeLogger("hub-daemon");
 
 initLogger({ console: false });
 
 async function run(): Promise<void> {
-    const socketPath = process.env.RELAY_HUB_SOCKET ?? HUB_SOCKET_PATH;
+    const socketPath = process.env.RELAY_HUB_SOCKET ?? hubSocketPath();
     const hub = await startHub({ socketPath });
     log.info("daemon_start", { socketPath, pid: process.pid });
 

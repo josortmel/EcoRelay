@@ -53,7 +53,12 @@ export async function listenWithRecovery(server: net.Server, socketPath: string)
         try {
             fs.unlinkSync(socketPath);
             log.info("stale_socket_unlinked", { socketPath });
-        } catch {}
+        } catch (err) {
+            log.warn("stale_socket_unlink_failed", {
+                socketPath,
+                err: (err as NodeJS.ErrnoException).message,
+            });
+        }
     }
 
     try {

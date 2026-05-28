@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 .mcp.json
+relay-config.json
+.faro/
+dist/

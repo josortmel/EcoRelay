@@ -1,6 +1,6 @@
 {
     "name": "eco-relay",
-    "version": "0.6.0",
+    "version": "0.7.2",
     "author": "Eco Consulting (https://github.com/EcoConsulting)",
     "contributors": [
         "josortmel (https://github.com/josortmel)",
@@ -12,7 +12,7 @@
     },
     "license": "PolyForm-Noncommercial-1.0.0",
     "type": "module",
-    "module": "src/channel.ts",
+    "module": "src/main.ts",
     "scripts": {
         "test": "bun test",
         "start": "bun src/main.ts",

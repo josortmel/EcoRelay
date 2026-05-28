@@ -23,3 +23,10 @@ export function logsDir(): string {
 export function groupsDir(): string {
     return path.join(dataDir(), "groups");
 }
+
+export function bridgeConfigPaths(): string[] {
+    const plugin = path.join(dataDir(), "bridge.json");
+    const global = path.join(os.homedir(), ".eco-relay", "bridge.json");
+    if (plugin === global) return [plugin];
+    return [plugin, global];
+}

@@ -68,7 +68,10 @@ export function createMailboxStore(dir: string) {
         urgent: boolean = false,
     ): { data: MailboxData; message: MailboxMessage } | null {
         const existing = load(owner);
-        if (!existing && totalMailboxCount() >= MAX_MAILBOXES) {
+        if (
+            !existing &&
+            fs.readdirSync(dir).filter((f) => f.endsWith(".json")).length >= MAX_MAILBOXES
+        ) {
             return null;
         }
         const data = existing ?? { owner, messages: [], last_read: null };

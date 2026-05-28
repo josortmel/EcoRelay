@@ -1,8 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { makeLogger } from "../logger";
-import { getToolSchemas, type ToolSchema } from "./tool-schemas";
-import type { ToolResult } from "./tools";
+import { getToolSchemas, type ToolSchema } from "./tool-schemas/index";
+import type { ToolResult } from "./tools/index";
 
 const log = makeLogger("channel");
 

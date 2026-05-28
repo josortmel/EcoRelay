@@ -78,6 +78,7 @@ export function startSessionWatcher(opts: SessionWatcherOptions): SessionWatcher
     };
 
     let watcher: fs.FSWatcher | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
     try {
         watcher = fs.watch(dir, { persistent: false }, (_event, filename) => {
             if (filename !== null && filename !== base) return;
@@ -88,6 +89,10 @@ export function startSessionWatcher(opts: SessionWatcherOptions): SessionWatcher
         });
     } catch (err) {
         logError(err);
+        // Fall back to polling when fs.watch is unavailable (network drives, etc.)
+        pollTimer = setInterval(() => {
+            schedule();
+        }, 2000);
     }
 
     return {
@@ -97,6 +102,10 @@ export function startSessionWatcher(opts: SessionWatcherOptions): SessionWatcher
             if (timer !== null) {
                 clearTimeout(timer);
                 timer = null;
+            }
+            if (pollTimer !== null) {
+                clearInterval(pollTimer);
+                pollTimer = null;
             }
             if (watcher !== null) {
                 try {

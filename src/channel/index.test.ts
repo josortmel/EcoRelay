@@ -119,24 +119,20 @@ describe("channel lifecycle", () => {
         expect(instr).toMatch(/<channel>/);
     });
 
-    test("instructions forbid relay_broadcast as a fallback when relay_ask fails", async () => {
+    test("instructions warn against using relay_broadcast as a fallback", async () => {
         const ch = await startCh({ socketPath: sockPath });
         closers.push(() => ch.close());
         const instr = ch.getInstructions();
-        expect(instr).toMatch(/never broadcast/i);
-        expect(instr).toContain("peer_not_found");
-        expect(instr).toContain("peer_gone");
-        expect(instr).toContain("timeout");
+        expect(instr).toMatch(/never.*fallback/i);
         expect(instr.toLowerCase()).toContain("fallback");
     });
 
-    test("exposes 20 tool stubs (5 core + 4 rooms + 9 groups + 2 mailbox)", async () => {
+    test("exposes 19 tool stubs (4 core + 4 rooms + 9 groups + 2 mailbox)", async () => {
         const ch = await startCh({ socketPath: sockPath });
         closers.push(() => ch.close());
         const tools = ch.getToolNames();
         expect(tools.sort()).toEqual(
             [
-                "relay_ask",
                 "relay_broadcast",
                 "relay_join",
                 "relay_leave",

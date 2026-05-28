@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 import { z } from "zod";
-import { dataDir } from "../data-dir";
+import { bridgeConfigPaths } from "../data-dir";
+import { makeLogger } from "../logger";
+
+const log = makeLogger("bridge");
 
 const BridgePeerSchema = z.object({
     hub_id: z.string().min(1).max(64),
@@ -27,22 +29,47 @@ export type BridgeConfig = z.infer<typeof BridgeConfigSchema>;
 export type BridgePeerConfig = z.infer<typeof BridgePeerSchema>;
 export type RelayConfig = z.infer<typeof RelaySchema>;
 
-export function bridgeConfigPath(): string {
-    return path.join(dataDir(), "bridge.json");
-}
-
 export function loadBridgeConfig(): BridgeConfig | null {
-    const p = bridgeConfigPath();
-    try {
-        const raw = JSON.parse(fs.readFileSync(p, "utf8"));
-        const cfg = BridgeConfigSchema.parse(raw);
-        if (process.platform !== "win32") {
-            try {
-                fs.chmodSync(p, 0o600);
-            } catch {}
+    const paths = bridgeConfigPaths();
+    for (const p of paths) {
+        let raw: string;
+        try {
+            raw = fs.readFileSync(p, "utf8");
+        } catch {
+            continue;
         }
-        return cfg;
-    } catch {
-        return null;
+
+        // Strip BOM (U+FEFF) — PowerShell on Windows may prepend it
+        if (raw.charCodeAt(0) === 0xfeff) {
+            raw = raw.slice(1);
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            log.warn("bridge_config_invalid_json", {
+                path: p,
+                hint: "bridge.json contains invalid JSON. If created with PowerShell, use [System.IO.File]::WriteAllText() or create with bash.",
+            });
+            continue;
+        }
+
+        try {
+            const cfg = BridgeConfigSchema.parse(parsed);
+            if (process.platform !== "win32") {
+                try {
+                    fs.chmodSync(p, 0o600);
+                } catch {}
+            }
+            return cfg;
+        } catch (e) {
+            log.warn("bridge_config_invalid_schema", {
+                path: p,
+                error: e instanceof Error ? e.message : String(e),
+                hint: "bridge.json has valid JSON but missing or invalid required fields. Check hub_id, secret, and peer format.",
+            });
+        }
     }
+    return null;
 }

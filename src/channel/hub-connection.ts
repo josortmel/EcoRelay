@@ -164,9 +164,7 @@ export function createHubConnection(socket: net.Socket) {
     }
 
     function close(): void {
-        pending.clear();
-        listeners.clear();
-        disconnectListeners.clear();
+        handleDisconnect();
         try {
             socket.end();
         } catch {}

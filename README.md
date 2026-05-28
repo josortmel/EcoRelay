@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/josortmel/eco-relay/releases/tag/v0.7.0"><img src="https://img.shields.io/badge/release-v0.7.0-orange" alt="Release"></a>
+  <a href="https://github.com/josortmel/eco-relay/releases/tag/v0.7.2"><img src="https://img.shields.io/badge/release-v0.7.2-orange" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License"></a>
   <img src="https://img.shields.io/badge/TypeScript-Bun-f5f5f5" alt="TypeScript + Bun">
-  <img src="https://img.shields.io/badge/MCP-20%20tools-0d9488" alt="MCP Tools">
+  <img src="https://img.shields.io/badge/MCP-19%20tools-0d9488" alt="MCP Tools">
   <img src="https://img.shields.io/badge/platform-Claude%20Code-7c3aed" alt="Claude Code">
 </p>
 
@@ -41,7 +41,7 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 **Core messaging**
 
-- **Direct ask/reply** — ask one peer, get a correlated natural-language reply (timeout-based)
+- **Persistent direct messaging** — fire-and-forget messages with offline delivery via relay_send and relay_inbox
 - **Broadcast** — ask every session at once, replies stream back
 - **Fixed identity** — pin sessions to stable names across restarts via `RELAY_PEER_ID`
 - **Zombie eviction** — automatic probe-and-replace for crashed sessions
@@ -65,7 +65,7 @@ Details: [docs/architecture.md](docs/architecture.md).
 - Hub-to-hub TCP bridge — machines on the same network exchange messages transparently
 - Remote peers addressed as `name@hub_id` — transparent routing
 - Shared secret auth, exponential backoff, auto-reconnect
-- Immediate `peer_gone` on disconnect — no timeout hangs
+- Immediate peer removal on disconnect — remote peers disappear from `relay_peers`
 
 **Cross-network internet federation** (v0.7)
 
@@ -108,7 +108,7 @@ Requires [Bun](https://bun.sh) and Claude Code 2.1.80+.
 
 ### 3. Install dependencies
 
-The plugin marketplace downloads source code but does not install npm dependencies. You must run this manually after install:
+Dependencies install automatically on first launch. If auto-install fails (e.g. Bun not in PATH), you'll see a clear error message telling you what to do. Manual install as fallback:
 
 ```bash
 cd ~/.claude/plugins/cache/eco-relay/relay/*/
@@ -119,14 +119,16 @@ bun install
 
 ### 4. Launch with required flags
 
-Eco Relay needs two flags to work correctly:
+**Both flags are mandatory.** Without them, the plugin either won't receive push messages or will prompt for every action.
 
 ```bash
 claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:relay@eco-relay
 ```
 
-- `--dangerously-load-development-channels` enables push notifications between sessions. Without it, the MCP connects and tools work, but incoming messages won't appear automatically — you'd have to poll manually.
-- `--dangerously-skip-permissions` prevents confirmation prompts on every tool call.
+| Flag                                      | What it does                                      | What happens without it                                                                                     |
+| ----------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `--dangerously-load-development-channels` | Enables `notifications/claude/channel` capability | MCP connects and tools work, but incoming messages never arrive — you'd have to poll `relay_inbox` manually |
+| `--dangerously-skip-permissions`          | Skips confirmation prompts on tool calls          | Every `relay_send`, `relay_peers`, etc. asks for confirmation — unusable for agent-to-agent communication   |
 
 Open two sessions in different directories and try the examples below.
 
@@ -146,7 +148,6 @@ Rename your session: `/relay-rename backend-api` or just say _"call yourself bac
 | Tool                  | What it does                                                          |
 | --------------------- | --------------------------------------------------------------------- |
 | `relay_peers`         | List active sessions                                                  |
-| `relay_ask`           | Ask one peer — correlated reply arrives as a notification             |
 | `relay_reply`         | Answer an incoming ask or message (auto-detects `ask_id` vs `msg_id`) |
 | `relay_send`          | Send a persistent message (online push or offline queue)              |
 | `relay_inbox`         | Read your mailbox (offline messages waiting for you)                  |
@@ -166,17 +167,7 @@ Rename your session: `/relay-rename backend-api` or just say _"call yourself bac
 | `relay_group_info`    | Group details: admin, members, online status                          |
 | `relay_group_delete`  | Delete group and history (admin only)                                 |
 
-### When to use ask vs send
-
-|              | `relay_ask`             | `relay_send`                                  |
-| ------------ | ----------------------- | --------------------------------------------- |
-| **Pattern**  | Request-response        | Fire-and-forget                               |
-| **Reply**    | Correlated via `ask_id` | Optional via `reply_to`                       |
-| **Timeout**  | 10 min default          | Never expires                                 |
-| **Offline**  | Fails with `peer_gone`  | Queued for later retrieval                    |
-| **Use when** | You need an answer now  | Async messaging, offline delivery, no urgency |
-
-`relay_reply` works with both: it auto-detects whether you are replying to an ask or a message.
+`relay_reply` works with both asks and messages: it auto-detects whether you are replying to an `ask_id` or a `msg_id`.
 
 ### Fixed identity
 
@@ -202,7 +193,7 @@ ls ~/.claude/plugins/data/relay-eco-relay/    # plugin mode (most users)
 ls ~/.eco-relay/                               # standalone/development mode
 ```
 
-> **Important**: when installed as a plugin, the hub reads config from `~/.claude/plugins/data/relay-eco-relay/`, NOT from `~/.eco-relay/`. Create `bridge.json` in whichever directory exists on your system.
+> **Important**: the hub searches for `bridge.json` in the plugin data directory first (`~/.claude/plugins/data/relay-eco-relay/`), falling back to `~/.eco-relay/`. Create `bridge.json` in whichever directory exists on your system.
 
 > **Windows PowerShell**: do NOT use `echo '...' > file.json` — PowerShell adds a BOM that breaks JSON parsing. Use `[System.IO.File]::WriteAllText("path\bridge.json", '{"..."}')` instead.
 
@@ -334,13 +325,9 @@ Add both `peers` (LAN) and `relay` (internet) to the same bridge.json. Local mac
 
 | Code                 | Meaning                                  |
 | -------------------- | ---------------------------------------- |
-| `peer_not_found`     | No peer registered under that name       |
-| `peer_gone`          | Target disconnected before replying      |
-| `timeout`            | Ask timed out (10 min default)           |
 | `name_taken`         | Name already in use                      |
 | `not_registered`     | Tool used before registering             |
 | `already_registered` | Same socket tried to register twice      |
-| `unknown_ask`        | Reply references unknown `ask_id`        |
 | `bad_msg`            | Malformed payload                        |
 | `bad_args`           | Wrong-typed arguments                    |
 | `hub_unreachable`    | Hub socket not responding                |

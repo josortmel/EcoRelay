@@ -90,7 +90,9 @@ export function wireHubRouting(
         }
         if (m.type === "ping") {
             hub.send({ type: "pong", req_id: m.req_id });
+            return;
         }
+        log.debug("unhandled_message_type", { type: m.type });
     });
 
     hub.onDisconnect(() => {

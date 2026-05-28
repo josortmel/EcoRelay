@@ -9,7 +9,6 @@ import { createBridge, type Bridge } from "./bridge";
 import { loadBridgeConfig } from "./bridge-config";
 import { createGroupStore } from "./groups";
 import {
-    handleAsk,
     handleBroadcast,
     handleGroupCreate,
     handleGroupDelete,
@@ -27,24 +26,18 @@ import {
     handleListRooms,
     handleRegister,
     handleRename,
-    handleReply,
     handleRoomMsg,
     handleSend,
     type HubContext,
-} from "./handlers";
+} from "./handlers/index";
 import { createMailboxStore } from "./mailbox";
-import { createPendingAsks, type PendingAsk } from "./pending-asks";
 import { createPeerRegistry } from "./registry";
 import { listenWithRecovery } from "./socket-recovery";
 
 const log = makeLogger("hub");
 
-export type { PendingAsk } from "./pending-asks";
-
 export type StartHubOptions = {
     socketPath: string;
-    defaultAskTimeoutMs?: number;
-    pendingAsks?: Map<string, PendingAsk>;
     idleExitMs?: number;
     onIdleExit?: () => void;
     /**
@@ -64,7 +57,6 @@ export type HubHandle = { close: () => Promise<void> };
 
 export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
     const { socketPath } = opts;
-    const defaultAskTimeoutMs = opts.defaultAskTimeoutMs ?? 600_000;
     const idleExitMs = opts.idleExitMs ?? 5 * 60 * 1000;
     const onIdleExit = opts.onIdleExit ?? (() => process.exit(0));
 
@@ -72,7 +64,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
     const registry = createPeerRegistry();
-    const pendingAsks = createPendingAsks(opts.pendingAsks);
     const groups = createGroupStore(groupsDir());
     const mailboxes = createMailboxStore(path.join(dataDir(), "mailboxes"));
 
@@ -120,8 +111,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
 
     const ctx: HubContext = {
         registry,
-        pendingAsks,
-        defaultAskTimeoutMs,
         sendTo,
         groups,
         mailboxes,
@@ -176,10 +165,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                     return handleRename(ctx, socket, msg, send);
                 case "list_peers":
                     return handleListPeers(ctx, socket, msg, send);
-                case "ask":
-                    return handleAsk(ctx, socket, msg, send);
-                case "reply":
-                    return handleReply(ctx, socket, msg, send);
                 case "broadcast":
                     return handleBroadcast(ctx, socket, msg, send);
                 case "join_room":
@@ -237,10 +222,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
         socket.on("close", () => {
             const name = registry.removeBySocket(socket);
             if (name) {
-                const { peerGone } = pendingAsks.cleanupForDisconnect(name);
-                for (const { askId, caller } of peerGone) {
-                    sendTo(caller, { type: "err", code: "peer_gone", ask_id: askId });
-                }
                 if (bridge && !name.includes("@")) {
                     bridge.broadcastPeerUpdate({
                         type: "bridge_peer_update",
@@ -252,7 +233,12 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
             scheduleIdleTimerIfEmpty();
         });
 
-        socket.on("error", () => {});
+        socket.on("error", (err) => {
+            log.debug("peer_socket_error", {
+                err: (err as Error).message,
+                name: registry.getName(socket) ?? "unregistered",
+            });
+        });
     });
 
     await listenWithRecovery(server, socketPath);
@@ -277,33 +263,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                 wrapped.from = `${baseName}@${fwd.origin_hub}`;
             }
 
-            if (wrapped.type === "incoming_ask" && typeof wrapped.ask_id === "string") {
-                const askId = wrapped.ask_id as string;
-                const threadId = typeof wrapped.thread_id === "string" ? wrapped.thread_id : "";
-                const askCaller = wrapped.from as string;
-                pendingAsks.create(
-                    askId,
-                    { caller: askCaller, target: fwd.target_peer, thread_id: threadId },
-                    24 * 60 * 60 * 1000,
-                    () => {},
-                );
-            }
-
-            if (wrapped.type === "incoming_reply" && typeof wrapped.ask_id === "string") {
-                const askId = wrapped.ask_id as string;
-                const peeked = pendingAsks.peek(askId);
-                if (!peeked) return;
-                if (!peeked.target.includes("@")) return;
-                pendingAsks.resolve(askId);
-            }
-
-            if (wrapped.type === "err" && typeof wrapped.ask_id === "string") {
-                const askId = wrapped.ask_id as string;
-                const peeked = pendingAsks.peek(askId);
-                if (!peeked || !peeked.target.includes("@")) return;
-                pendingAsks.resolve(askId);
-            }
-
             const validated = ServerMsgSchema.safeParse(wrapped);
             if (!validated.success) {
                 log.warn("bridge_forward_invalid_wrapped", {
@@ -320,14 +279,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                     err: e instanceof Error ? e.message : String(e),
                 });
             }
-        });
-        bridge.setOnBridgeDisconnect((hubId) => {
-            const suffix = `@${hubId}`;
-            const { peerGone } = pendingAsks.cleanupByTargetSuffix(suffix);
-            for (const { askId, caller } of peerGone) {
-                sendTo(caller, { type: "err", code: "peer_gone", ask_id: askId });
-            }
-            pendingAsks.cleanupByCallerSuffix(suffix);
         });
         bridge.listen();
         bridge.connectToAllPeers();
@@ -371,7 +322,6 @@ export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
                 sweepTimer = null;
             }
             cancelIdleTimer();
-            pendingAsks.clearAll();
             await bridge?.close();
             await new Promise<void>((resolve) => {
                 server.close(() => {

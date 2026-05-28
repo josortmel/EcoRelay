@@ -1,23 +1,39 @@
 import { spawn } from "node:child_process";
 import * as net from "node:net";
 import * as path from "node:path";
+import { makeLogger } from "../logger";
+
+const log = makeLogger("daemon");
 
 const DAEMON_ENTRY = path.resolve(import.meta.dir, "..", "hub-daemon.ts");
 
 export function tryConnect(socketPath: string): Promise<net.Socket | null> {
     const sock = new net.Socket();
-    sock.on("error", () => {});
     return new Promise((resolve) => {
         const onConnect = () => {
             sock.removeListener("error", onError);
             sock.on("error", () => {});
             resolve(sock);
         };
-        const onError = () => {
+        const onError = (err: Error & { code?: string }) => {
             sock.removeListener("connect", onConnect);
             try {
                 sock.destroy();
             } catch {}
+            const code = (err as { code?: string }).code;
+            if (code === "EADDRINUSE") {
+                log.warn("socket_busy", {
+                    socketPath,
+                    hint: "Another hub instance may already be running on this socket.",
+                });
+            } else if (code === "ECONNREFUSED") {
+                log.warn("socket_stale", {
+                    socketPath,
+                    hint: "A stale socket file exists but nothing is listening. The daemon may have crashed.",
+                });
+            } else if (code !== "ENOENT") {
+                log.debug("socket_connect_error", { socketPath, code });
+            }
             resolve(null);
         };
         sock.once("connect", onConnect);
@@ -31,12 +47,12 @@ export async function waitForSocketReady(
     timeoutMs: number,
 ): Promise<net.Socket | null> {
     const deadline = Date.now() + timeoutMs;
+    let delay = 25;
     while (Date.now() < deadline) {
-        // Skip fs.existsSync: on Windows it doesn't see Unix domain socket files,
-        // so we try connecting directly and let it fail gracefully.
         const sock = await tryConnect(socketPath);
         if (sock) return sock;
-        await new Promise((r) => setTimeout(r, 25));
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, 500);
     }
     return null;
 }
@@ -58,17 +74,30 @@ export async function spawnDetachedDaemon(
         }).filter(([, v]) => v !== undefined),
     );
     if (process.platform === "win32") {
-        spawn("cmd.exe", ["/c", "start", '""', "/b", "bun", "run", DAEMON_ENTRY], {
+        const child = spawn("cmd.exe", ["/c", "start", '""', "/b", "bun", "run", DAEMON_ENTRY], {
             env,
             stdio: "ignore",
             detached: true,
             cwd: path.dirname(DAEMON_ENTRY),
-        }).unref();
+        });
+        child.on("error", (err) => {
+            log.error("daemon_spawn_failed", {
+                err: err.message,
+                hint: "Ensure bun is installed and in PATH.",
+            });
+        });
+        child.unref();
     } else {
         const child = spawn("bun", ["run", DAEMON_ENTRY], {
             env,
             detached: true,
             stdio: ["ignore", "ignore", "ignore"],
+        });
+        child.on("error", (err) => {
+            log.error("daemon_spawn_failed", {
+                err: err.message,
+                hint: "Ensure bun is installed and in PATH.",
+            });
         });
         child.unref();
     }

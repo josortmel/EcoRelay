@@ -1,7 +1,10 @@
+import { ensureDeps } from "./channel/bootstrap-deps";
 import { main } from "./channel/index";
 import { initLogger } from "./logger";
 
 initLogger({ console: true });
+
+ensureDeps();
 
 function shutdown(): void {
     process.exit(0);

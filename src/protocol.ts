@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { hubSocketPath } from "./data-dir";
-
 export const PROTOCOL_VERSION = "5";
 
 // 512 KiB body cap leaves headroom under the 1 MiB framing.MAX_LINE_LEN for JSON envelope and escapes.
@@ -23,15 +21,6 @@ export const RenameMsg = z.object({
 export const ListPeersMsg = z.object({
     type: z.literal("list_peers"),
     req_id: z.string().optional(),
-});
-
-export const AskMsg = z.object({
-    type: z.literal("ask"),
-    to: z.string(),
-    question: z.string().max(MAX_TEXT_LEN),
-    ask_id: z.string(),
-    timeout_ms: z.number().optional(),
-    thread_id: z.string().optional(),
 });
 
 export const ReplyMsg = z.object({
@@ -148,7 +137,6 @@ export const ClientMsgSchema = z.discriminatedUnion("type", [
     RegisterMsg,
     RenameMsg,
     ListPeersMsg,
-    AskMsg,
     ReplyMsg,
     BroadcastMsg,
     PongMsg,
@@ -424,5 +412,3 @@ export const ServerMsgSchema = z.discriminatedUnion("type", [
 export type ClientMsg = z.infer<typeof ClientMsgSchema>;
 export type ServerMsg = z.infer<typeof ServerMsgSchema>;
 export type PeerRecord = z.infer<typeof PeerRecordSchema>;
-
-export const HUB_SOCKET_PATH: string = hubSocketPath();

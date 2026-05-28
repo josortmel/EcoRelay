@@ -194,7 +194,10 @@ export function startRelayServer(config: RelayConfig) {
                     const entry = hubs.get(hubId);
                     if (entry) {
                         if (msg.action === "join" && msg.peer) {
-                            entry.peers.push(msg.peer);
+                            const peer = msg.peer;
+                            if (!entry.peers.some((p) => p.name === peer.name)) {
+                                entry.peers.push(peer);
+                            }
                         } else if (msg.action === "leave" && msg.name) {
                             entry.peers = entry.peers.filter((p) => p.name !== msg.name);
                         }
@@ -219,6 +222,7 @@ export function startRelayServer(config: RelayConfig) {
                     }
                     return;
                 }
+                console.warn(`[relay] unhandled msg from ${hubId}: ${msg.type}`);
             },
             close(ws) {
                 // FIX 5: always clear the timer, including when close fires before timeout

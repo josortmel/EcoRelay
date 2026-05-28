@@ -286,7 +286,11 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
 
         ws.onmessage = (event) => {
             const text =
-                typeof event.data === "string" ? event.data : (event.data as Buffer).toString();
+                typeof event.data === "string"
+                    ? event.data
+                    : event.data instanceof ArrayBuffer
+                      ? new TextDecoder().decode(event.data)
+                      : String(event.data);
             let raw: unknown;
             try {
                 raw = JSON.parse(text);

@@ -1,6 +1,7 @@
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFileSync } from "node:child_process";
+import { hubSocketPath } from "../data-dir";
 import {
     claudeSessionName,
     claudeSessionPath,
@@ -9,7 +10,7 @@ import {
     sanitizeSessionName,
 } from "../identity";
 import { makeLogger } from "../logger";
-import { HUB_SOCKET_PATH, type ServerMsg } from "../protocol";
+import { type ServerMsg } from "../protocol";
 import { bootstrapHub, type HubRole } from "./bootstrap";
 import { createMcpServer, wireToolHandlers } from "./mcp-server";
 import { createPendingBroadcasts } from "./pending-broadcasts";
@@ -17,26 +18,25 @@ import { createReconnector } from "./reconnect";
 import { registerWithRetries } from "./register";
 import { buildEmitNotification, wireHubRouting } from "./routing";
 import { startSessionWatcher } from "./session-watcher";
-import { TOOLS, type ToolSchema } from "./tool-schemas";
+import { TOOLS, type ToolSchema } from "./tool-schemas/index";
 import {
     callTool as dispatchTool,
     renameWithHub,
     type ChannelContext,
     type ToolResult,
-} from "./tools";
+} from "./tools/index";
 
 const log = makeLogger("channel");
 
 const INSTRUCTIONS = [
     "If an incoming `<channel>` message carries an `ask_id` in its meta, you MUST reply via relay_reply(ask_id, text) BEFORE handling any other user work. The peer session is blocked waiting on your reply. Exception: if the pending user work is destructive or irreversible, complete or confirm that first, then reply.",
     "Whenever an incoming `<channel>` message arrives (ask, reply, or broadcast), your first user-visible output that turn must quote the peer's full body verbatim in a fenced markdown block, prefixed with the sender name and kind (e.g. `peer-name (ask):`). The Claude Code TUI truncates tool-result panels, so plain assistant text is the only place the user actually sees the message. Quote first, then act.",
-    "When an incoming reply to one of your asks contains a question directed back at you, surface that question to the user and offer to follow up with a new relay_ask(); do not end your turn without relaying the question-back.",
-    "Pick the target with relay_peers() (match by name/cwd/branch); use relay_ask for one peer, relay_broadcast for all.",
-    "If a relay_ask fails (peer_not_found, peer_gone, timeout), surface the failure to the user and let them decide. Never broadcast as a fallback: relay_broadcast hits every session on the machine, including ones on unrelated projects, and is almost always the wrong recovery.",
+    "When an incoming reply to one of your asks contains a question directed back at you, surface that question to the user and offer to follow up with a new relay_send(); do not end your turn without relaying the question-back.",
+    "Pick the target with relay_peers() (match by name/cwd/branch); use relay_send for one peer, relay_broadcast for all. Never use relay_broadcast as a fallback — it hits every session on the machine, including ones on unrelated projects.",
     'If the user refers to a peer by pronoun or demonstrative ("them", "that session", "it"), carry forward the most recent `to:` value. If ambiguous across multiple peers, call relay_peers and confirm with the user before sending.',
     "Trust tool defaults. Only override an argument when the user gave an explicit value for that exact argument; descriptive words about the answer never change tool arguments.",
-    "For multi-peer coordination, use rooms (relay_join, relay_room, relay_leave, relay_rooms). Rooms are ephemeral IRC-style: implicit creation on first join, implicit destruction on last leave, no permissions (any peer can post to any room, with or without membership). Prefer relay_ask for one-to-one exchanges and relay_room for broadcast-to-subgroup; relay_room is fire-and-forget, NOT request/response — use relay_ask if you need a directed reply.",
-    "Incoming room messages arrive as `<channel>` notifications with `room`, `from`, `text`, and `msg_id` in meta and NO `ask_id`. They are announcements, NOT questions: do NOT call relay_reply on them. If the message in the room invites follow-up, decide between relay_ask (directed reply, blocks the asker) and relay_room (visible to the whole room) based on whether the answer concerns one peer or the group.",
+    "For multi-peer coordination, use rooms (relay_join, relay_room, relay_leave, relay_rooms). Rooms are ephemeral IRC-style: implicit creation on first join, implicit destruction on last leave, no permissions (any peer can post to any room, with or without membership). Use relay_send for one-to-one exchanges and relay_room for broadcast-to-subgroup; relay_room is fire-and-forget, NOT request/response — use relay_send if you need a directed reply.",
+    "Incoming room messages arrive as `<channel>` notifications with `room`, `from`, `text`, and `msg_id` in meta and NO `ask_id`. They are announcements, NOT questions: do NOT call relay_reply on them. If the message in the room invites follow-up, decide between relay_send (directed reply) and relay_room (visible to the whole room) based on whether the answer concerns one peer or the group.",
     "When you receive an incoming_message with urgent=true in meta, treat it with the same priority as an incoming ask: act on it BEFORE handling other user work. Reply with relay_send(to=sender, text=response, reply_to=msg_id). Urgent messages retrieved via relay_inbox (messages[].urgent === true) carry the same priority — act on them before other work. If urgent is absent or false, the message is informational — read and act when appropriate.",
 ].join(" ");
 
@@ -87,7 +87,7 @@ export type ChannelHandle = {
 };
 
 export async function startChannel(opts: StartChannelOptions = {}): Promise<ChannelHandle> {
-    const socketPath = opts.socketPath ?? HUB_SOCKET_PATH;
+    const socketPath = opts.socketPath ?? hubSocketPath();
     let bootstrap = await bootstrapHub(socketPath, opts.hubSpawner);
 
     const onIncoming = opts.onIncoming;
@@ -287,9 +287,7 @@ export async function startChannel(opts: StartChannelOptions = {}): Promise<Chan
                 });
                 void close();
             }
-        }, parentWatchIntervalMs);
-        // Don't keep the event loop alive solely for this watcher.
-        parentWatcher.unref?.();
+        }, parentWatchIntervalMs).unref();
     }
 
     // If the MCP transport closes (e.g. parent Claude Code died -> stdin EOF),

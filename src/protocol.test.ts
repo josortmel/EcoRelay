@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
     AckMsg,
-    AskMsg,
     BroadcastMsg,
     ClientMsgSchema,
     ErrCodeSchema,
@@ -93,24 +92,6 @@ describe("protocol client messages", () => {
         expect(ClientMsgSchema.parse(m)).toEqual(m);
     });
 
-    test("ask round-trips", () => {
-        const m = { type: "ask" as const, to: "bob", question: "hi?", ask_id: "a1" };
-        expect(AskMsg.parse(m)).toEqual(m);
-        expect(ClientMsgSchema.parse(m)).toEqual(m);
-    });
-
-    test("ask accepts optional timeout_ms", () => {
-        const m = {
-            type: "ask" as const,
-            to: "bob",
-            question: "hi?",
-            ask_id: "a1",
-            timeout_ms: 5000,
-        };
-        expect(AskMsg.parse(m)).toEqual(m);
-        expect(ClientMsgSchema.parse(m)).toEqual(m);
-    });
-
     test("reply round-trips", () => {
         const m = { type: "reply" as const, ask_id: "a1", text: "yes" };
         expect(ReplyMsg.parse(m)).toEqual(m);
@@ -184,17 +165,6 @@ describe("protocol client messages", () => {
         expect(ClientMsgSchema.parse(m)).toEqual(m);
         const m2 = { type: "list_rooms" as const, req_id: "r4" };
         expect(ListRoomsMsg.parse(m2)).toEqual(m2);
-    });
-
-    test("AskMsg.question accepts 100 KB and rejects 600 KB", () => {
-        const small = "a".repeat(100 * 1024);
-        const big = "a".repeat(600 * 1024);
-        expect(
-            AskMsg.parse({ type: "ask", to: "bob", question: small, ask_id: "a1" }).question.length,
-        ).toBe(small.length);
-        expect(() =>
-            AskMsg.parse({ type: "ask", to: "bob", question: big, ask_id: "a1" }),
-        ).toThrow();
     });
 
     test("ReplyMsg.text accepts 100 KB and rejects 600 KB", () => {
@@ -364,19 +334,9 @@ describe("protocol server messages", () => {
         expect(ErrCodeSchema.parse("mailbox_error")).toBe("mailbox_error");
     });
 
-    test("ask/incoming_ask/incoming_reply accept optional thread_id; reply does not carry one", () => {
-        const ask = {
-            type: "ask" as const,
-            to: "bob",
-            question: "hi?",
-            ask_id: "a1",
-            thread_id: "t1",
-        };
-        expect(AskMsg.parse(ask)).toEqual(ask);
-
+    test("incoming_ask/incoming_reply accept optional thread_id; reply does not carry one", () => {
         const reply = { type: "reply" as const, ask_id: "a1", text: "y" };
         expect(ReplyMsg.parse(reply)).toEqual(reply);
-        // thread_id on the wire is stripped by zod — hub resolves it from the pending entry.
         const replyWithZombie = { ...reply, thread_id: "t1" };
         expect(ReplyMsg.parse(replyWithZombie)).toEqual(reply);
 

@@ -23,9 +23,9 @@ function isTestEnv(): boolean {
  */
 export function initLogger(options?: InitLoggerOptions): void {
     if (initialized) return;
-    initialized = true;
 
     if (isTestEnv()) return;
+    initialized = true;
 
     const dir = logsDir();
 
@@ -65,7 +65,10 @@ export function initLogger(options?: InitLoggerOptions): void {
             level: "debug",
             transports,
         });
-    } catch {
+    } catch (err) {
+        process.stderr.write(
+            `relay: failed to initialize logger: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
         logger = null;
     }
 }
