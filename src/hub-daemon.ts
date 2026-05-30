@@ -8,7 +8,8 @@ initLogger({ console: false });
 
 async function run(): Promise<void> {
     const socketPath = process.env.RELAY_HUB_SOCKET ?? hubSocketPath();
-    const hub = await startHub({ socketPath });
+    const wsPort = Number(process.env.ECORELAY_WS_PORT ?? "9376");
+    const hub = await startHub({ socketPath, wsPort });
     log.info("daemon_start", { socketPath, pid: process.pid });
 
     const shutdown = (): void => {
