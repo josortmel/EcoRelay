@@ -103,23 +103,6 @@ export async function waitForSocketReady(
     return null;
 }
 
-// ── WS helpers ─────────────────────────────────────────────────────
-
-function tryConnectWs(port: number): Promise<WebSocket | null> {
-    return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 2_000);
-        const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-        ws.onopen = (): void => {
-            clearTimeout(timer);
-            resolve(ws);
-        };
-        ws.onerror = (): void => {
-            clearTimeout(timer);
-            resolve(null);
-        };
-    });
-}
-
 // ── Lock file ──────────────────────────────────────────────────────
 
 function isProcessAlive(pid: number): boolean {

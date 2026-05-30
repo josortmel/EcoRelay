@@ -1,13 +1,22 @@
-import { describe, expect, test, mock, beforeAll } from "bun:test";
+import { describe, expect, test, mock, beforeAll, afterAll } from "bun:test";
 import * as path from "node:path";
 import * as os from "node:os";
 
 let _server: any;
+const _prevDaemonPath = process.env.ECORELAY_DAEMON_PATH;
 
 beforeAll(async () => {
     process.env.ECORELAY_DAEMON_PATH = path.join(os.tmpdir(), "nonexistent-daemon.ts");
     const mod = await import("./ecorelay");
     _server = mod.server;
+});
+
+afterAll(() => {
+    if (_prevDaemonPath !== undefined) {
+        process.env.ECORELAY_DAEMON_PATH = _prevDaemonPath;
+    } else {
+        delete process.env.ECORELAY_DAEMON_PATH;
+    }
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────

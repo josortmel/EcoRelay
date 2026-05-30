@@ -4,14 +4,19 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_DIR="${HOME}/.ecorelay"
 OC_PLUGIN_DIR="${HOME}/.config/opencode/plugins"
-CC_CACHE_DIR="${HOME}/.claude/plugins/cache/eco-relay/relay/0.7.2"
-VERSION="0.7.6"
+CC_CACHE_DIR="${HOME}/.claude/plugins/cache/eco-relay/relay/0.8.0"
+VERSION="0.8.0"
 
 echo "EcoRelay v${VERSION} — installing..."
 
 # 1. Create directories (fresh install)
+if [ -L "${INSTALL_DIR}" ]; then
+    echo "ERROR: ${INSTALL_DIR} is a symlink, refusing"
+    exit 1
+fi
 rm -rf "${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
+chmod 0700 "${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}/src"
 mkdir -p "${OC_PLUGIN_DIR}"
 
@@ -58,7 +63,7 @@ if [ ! -f "${OC_PLUGIN_DIR}/package.json" ]; then
 {
   "dependencies": {
     "@opencode-ai/plugin": "1.15.12",
-    "ws": "^8.18.0"
+    "ws": "8.18.0"
   }
 }
 PACKAGEDEPS
@@ -71,9 +76,9 @@ if [ -d "${CC_CACHE_DIR}" ]; then
     echo "CC cache synced"
 fi
 
-# 5. Verify (unit tests only — integration tests need isolated Hub)
+# 6. Verify (unit tests only — integration tests need isolated Hub)
 bun run typecheck
-bun test --ignore "src/integration/*"
+bun test --path-ignore-patterns "src/integration/*"
 
 echo ""
 echo "EcoRelay v${VERSION} installed."

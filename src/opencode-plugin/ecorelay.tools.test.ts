@@ -4,7 +4,7 @@ import { server } from "./ecorelay";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function mockSessionList(
-    sessions: Array<{ id: string; title?: string | null; parentId?: string | null }> = [],
+    sessions: Array<{ id: string; title?: string | null; parentID?: string | null }> = [],
 ) {
     return mock(async () => sessions);
 }
