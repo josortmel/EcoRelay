@@ -1,5 +1,14 @@
-import { describe, expect, test, mock } from "bun:test";
-import { server } from "./ecorelay";
+import { describe, expect, test, mock, beforeAll } from "bun:test";
+import * as path from "node:path";
+import * as os from "node:os";
+
+let _server: any;
+
+beforeAll(async () => {
+    process.env.ECORELAY_DAEMON_PATH = path.join(os.tmpdir(), "nonexistent-daemon.ts");
+    const mod = await import("./ecorelay");
+    _server = mod.server;
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -30,7 +39,7 @@ function mockPluginInput(overrides: Record<string, unknown> = {}) {
 
 describe("Server export", () => {
     test("plugin exported as named export 'server'", () => {
-        expect(typeof server).toBe("function");
+        expect(typeof _server).toBe("function");
     });
 });
 
@@ -40,7 +49,7 @@ describe("Server lifecycle", () => {
         const input = mockPluginInput({
             client: { session: { list: listSpy, prompt: mock(async () => {}) } },
         });
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
         expect(listSpy).toHaveBeenCalled();
         expect(typeof hooks.dispose).toBe("function");
         expect(typeof hooks.event).toBe("function");
@@ -57,7 +66,7 @@ describe("Server lifecycle", () => {
                 },
             },
         });
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
         expect(hooks.tool).toBeDefined();
     });
 
@@ -69,7 +78,7 @@ describe("Server lifecycle", () => {
         const input = mockPluginInput({
             client: { session: { list: mockSessionList(sessions), prompt: mock(async () => {}) } },
         });
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
         // Child sessions with parentID are skipped in bootstrap
         // Root session s1 is passed to ensurePeer
         expect(hooks.tool).toBeDefined();
@@ -77,7 +86,7 @@ describe("Server lifecycle", () => {
 
     test("dispose runs without error", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
         await hooks.dispose!();
         expect(true).toBe(true);
     });
@@ -86,7 +95,7 @@ describe("Server lifecycle", () => {
 describe("Tool registration", () => {
     test("all 19 MCP tools are registered", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         const toolNames = [
             "relay_send", "relay_inbox", "relay_reply", "relay_broadcast",
@@ -107,7 +116,7 @@ describe("Tool registration", () => {
 describe("Event handler", () => {
     test("session.created with valid session via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         // SDK v1.15.12: properties.info, not .session
         await expect(
@@ -122,7 +131,7 @@ describe("Event handler", () => {
 
     test("session.created with invalid properties does not crash", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         // Invalid: empty properties (no .info)
         await expect(
@@ -140,7 +149,7 @@ describe("Event handler", () => {
 
     test("session.created with child session (parentID) is skipped", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         // SDK v1.15.12: parentID (capital D) — child session must NOT create a peer
         await expect(
@@ -155,7 +164,7 @@ describe("Event handler", () => {
 
     test("session.deleted with valid info.id removes peer", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         // Create peer first
         await hooks.event!({
@@ -174,7 +183,7 @@ describe("Event handler", () => {
 
     test("session.deleted with invalid properties warns but does not crash", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         // Invalid: no .info
         await expect(
@@ -188,7 +197,7 @@ describe("Event handler", () => {
 
     test("concurrent session.created events with .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         for (let i = 0; i < 20; i++) {
             await hooks.event!({
@@ -204,7 +213,7 @@ describe("Event handler", () => {
 
     test("rapid create+delete+create same id via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         const sid = "churn-session";
         await hooks.event!({
@@ -224,7 +233,7 @@ describe("Event handler", () => {
 describe("System transform", () => {
     test("injects INSTRUCTIONS when not present", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         const output = { system: [] as string[] };
         await hooks["experimental.chat.system.transform"]!({} as any, output);
@@ -234,7 +243,7 @@ describe("System transform", () => {
 
     test("does not inject INSTRUCTIONS twice", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         const output = { system: [] as string[] };
         await hooks["experimental.chat.system.transform"]!({} as any, output);
@@ -244,7 +253,7 @@ describe("System transform", () => {
 
     test("skips injection if marker already present", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         const output = { system: ["[ECORELAY_INSTRUCTIONS_v0.7.6] existing content"] };
         await hooks["experimental.chat.system.transform"]!({} as any, output);
@@ -255,13 +264,13 @@ describe("System transform", () => {
 describe("Edge cases", () => {
     test("server handles empty session list", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
         expect(hooks.tool).toBeDefined();
     });
 
     test("server handles unicode session titles via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         await expect(
             hooks.event!({
@@ -275,7 +284,7 @@ describe("Edge cases", () => {
 
     test("server handles session with null title via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await server(input as any);
+        const hooks = await _server(input as any);
 
         await expect(
             hooks.event!({
