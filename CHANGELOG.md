@@ -4,6 +4,52 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [0.7.6] — 2026-05-30
+
+Bootstrap symmetry, lock file, push URL auto-discovery, version check, install unified. 490 tests, zero debt.
+
+### Added
+
+- **Bootstrap symétrico + Lock file** (`src/shared/hub-spawner.ts`, 340 LOC): ambos plugins pueden spawnear el Hub. Lock file atómico (`O_CREAT|O_EXCL`) en `~/.eco-relay/hub.lock` previene doble spawn. Hash SHA-256 de `hub-daemon.ts` embebido como constante para verificación pre-spawn (previene path injection).
+- **Push URL auto-descubrimiento** (`discoverPushUrl`): 3 fuentes en cascada — `PluginContext.serverUrl` → `ECORELAY_OC_PORT` env → default `http://127.0.0.1:4096`. Validación de localhost y rango de puerto. Sin variables de entorno manuales.
+- **Version check** (`isNewer`): comparación semántica de versiones (split por `.`, numérica). Si Hub es más nuevo que el plugin, `console.error` con comando exacto de reinstalación.
+- **Install script unificado** (`scripts/install.sh`): un comando instala todo — Hub a `~/.ecorelay/`, plugin OC a `~/.config/opencode/plugins/`, sync cache CC. `bun install --ignore-scripts` + `bun test`. Limpia plugin viejo de `~/.opencode/plugin/`.
+
+### Changed
+
+- **OC plugin migrado a API real** (`@opencode-ai/plugin` v1.15.12): `export const server` devuelve `Hooks {tool, event, dispose, system.transform}`. 19 tools con `tool()` Zod schemas. Bootstrap fire-and-forget (no bloquea arranque de OC).
+- **Protocolo bidireccional**: `PingMsg` en `ClientMsgSchema`, `PongMsg` en `ServerMsgSchema`. `case "ping"` en `handleLine` del Hub. El handshake de bootstrap funciona en ambas direcciones.
+- **daemon-spawn.ts**: delegado a `shared/hub-spawner.ts` (3 LOC, re-export). Compatible hacia atrás con CC.
+- **Badge + platform table**: v0.7.6, OpenCode partial support.
+
+### Security
+
+- **Event forgery prevention**: `Hooks.event` valida `event.properties` con type guards antes de procesar sesiones. Propiedades inválidas → `console.warn` + skip.
+- **Prompt injection wrapper**: push via `client.session.prompt()` envuelve contenido no confiable en `<untrusted_peer_message>` con instrucción explícita de no seguir instrucciones embebidas. `</untrusted_peer_message>` sanitizado.
+- **Module state isolation**: `projectDirectory`/`_client` en closure de `server()`, no en scope de módulo. `cleanup()` resetea todo el estado en `dispose`.
+- **INSTRUCTIONS marker versionado**: `[ECORELAY_INSTRUCTIONS_v0.7.6]` como clave estable para idempotencia, reemplaza substring matching frágil.
+- **crypto.getRandomValues() fallback**: reemplaza `Math.random()` en fallback de `randomUUID()` para Node <19.
+- **localhost validation en push URL**: rechaza orígenes no-localhost en `discoverPushUrl`.
+- **429 retry**: `pushToSession` reintenta en rate limit (previamente tratado como error permanente).
+- **messageSenders + broadcastReceipts**: Maps separados. Cap de 200 entradas con evicción LRU.
+- **pendingRequests cleanup**: `dispose` limpia timers + rechaza promesas pendientes.
+
+### Fixed
+
+- **Bootstrap handshake**: `tryConnect` manda ping, el Hub ahora responde pong. 44 tests que fallaban con "failed to connect to hub after spawn" — resueltos.
+- **OC startup hang**: `await client.session.list()` reemplazado por IIFE fire-and-forget. El plugin devuelve Hooks inmediatamente.
+- **Dual plugin load**: copia vieja en `~/.opencode/plugin/` eliminada por `install.sh`. Solo existe en `~/.config/opencode/plugins/`.
+- **Windows spawn**: eliminado wrapper `cmd.exe`. `spawn("bun", ...)` directo con `windowsHide: true`, igual que v0.7.2.
+- **Zod schema-handler parity**: constraints documentados en `describe()` ahora aplicados como validación de handler.
+- **session.status**: implementado tracking busy/idle (`sessionStatus` Map).
+- **Peer cache in-memory**: `_cachedPeers` Map evita lecturas de disco redundantes.
+- **BC1-8, VS1-10**: ~25 fixes de seguridad y código de 2 loops adversariales. Ver informe de construcción para detalle completo.
+
+### Known limitations
+
+- **OC no spawnea el Hub**: `getBootstrapHub` eliminado (el import no resuelve en runtime OC). Workaround: abrir CC primero. Fix planeado para v0.8.
+- **OC plugin requiere CC abierto**: el Hub solo arranca con WS endpoint si CC lo spawnea. `ECORELAY_WS_PORT` no se propaga del spawn al daemon en todos los casos.
+
 ## [0.7.5] — 2026-05-29
 
 Multi-platform support: OpenCode plugin + Hub WebSocket endpoint. Cross-CLI messaging between Claude Code and OpenCode.

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/josortmel/eco-relay/releases/tag/v0.7.5"><img src="https://img.shields.io/badge/release-v0.7.5-orange" alt="Release"></a>
+  <a href="https://github.com/josortmel/eco-relay/releases/tag/v0.7.6"><img src="https://img.shields.io/badge/release-v0.7.6-orange" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License"></a>
   <img src="https://img.shields.io/badge/TypeScript-Bun-f5f5f5" alt="TypeScript + Bun">
   <img src="https://img.shields.io/badge/MCP-19%20tools-0d9488" alt="MCP Tools">
@@ -38,20 +38,20 @@ Four pieces, three transport layers:
 
 Details: [docs/architecture.md](docs/architecture.md).
 
-### Multi-Platform (v0.7.5)
+### Multi-Platform (v0.7.6)
 
-Eco Relay now supports cross-CLI messaging between Claude Code and OpenCode:
+Eco Relay supports cross-CLI messaging between Claude Code and OpenCode via a shared Hub daemon:
 
-- **Hub WebSocket endpoint** — runs alongside the Unix socket on `ws://127.0.0.1:9376`. OpenCode plugins connect via WebSocket using the same wire protocol. VirtualSocket adapts WS to the registry's socket contract.
-- **OpenCode plugin** (`src/opencode-plugin/ecorelay.ts`) — registers all 19 relay MCP tools in OpenCode. Push delivery via OC Server API (`POST /session/:id/message`). Session lifecycle events, WebSocket reconnect with exponential backoff, peer ID persistence across restarts.
-- **Cross-CLI messaging** — a CC peer `gamma` can `relay_send` to an OC peer `alfa` and the message appears in the OC TUI. vice-versa. Broadcasts reach all sessions regardless of CLI.
+- **Claude Code**: full support. Sessions connect via Unix socket. Hub auto-spawns on first session, auto-exits after idle. All 19 relay tools, push notifications, persistent messaging.
+- **OpenCode**: partial support (v0.7.6). Plugin loads and registers all 19 `relay_*` tools. Hub connection via WebSocket (`ws://127.0.0.1:9376`). Push delivery via OC Server API with auto-discovered URL. **Known limitation**: Hub must be running (started by Claude Code) before OC connects. OC auto-spawn is planned for v0.8.
+- **Cross-CLI messaging**: a CC peer sends `relay_send` to an OC peer — the message appears in the OC TUI. Broadcasts reach all sessions regardless of CLI.
 
-**Installation:**
+**Installation (one command):**
 ```bash
-bash scripts/install-opencode-plugin.sh
-# Then add to opencode.jsonc: "server": { "port": 4096, "hostname": "127.0.0.1" }
-# Restart OpenCode TUI
+bash scripts/install.sh
 ```
+
+This installs everything: Hub code to `~/.ecorelay/`, OC plugin to `~/.config/opencode/plugins/`, and syncs the CC cache. No manual config needed. Open Claude Code or OpenCode — done.
 
 ## Features
 
@@ -100,7 +100,7 @@ bash scripts/install-opencode-plugin.sh
 | Platform               | Status               |
 | ---------------------- | -------------------- |
 | Claude Code CLI        | Full support         |
-| OpenCode               | Full support (v0.7.5) |
+| OpenCode               | Partial support (v0.7.6) |
 | Other AI CLI platforms | Planned (v1.0)       |
 
 Eco Relay ships as a Claude Code plugin. The hub and bridge layers are already platform-agnostic — extending to other CLI-based AI assistants (Codex, Antigravity, Cursor, and other agentic harnesses) is the design goal for v1.0.
@@ -331,7 +331,8 @@ Add both `peers` (LAN) and `relay` (internet) to the same bridge.json. Local mac
 | v0.5    | Released | Claude Code plugin packaging                                                                  |
 | v0.6    | Released | Persistent direct messaging (mailbox)                                                         |
 | v0.7    | Released | Internet federation (WebSocket relay)                                                         |
-| v0.7.5  | Current  | Multi-platform (OpenCode plugin + Hub WS endpoint)                                            |
+| v0.7.5  | Released | Multi-platform (OpenCode plugin + Hub WS endpoint)                                            |
+| v0.7.6  | Current  | Bootstrap symmetry, lock file, push URL auto-discovery, install unified, debt zero            |
 | v0.8    | Next     | End-to-end encryption                                                                         |
 | v1.0    | Planned  | Platform-agnostic (adapter layer for Codex, Antigravity, Cursor, and other agentic harnesses) |
 
