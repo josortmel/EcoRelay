@@ -467,7 +467,10 @@ function spawnHubDaemon(): void {
     try {
         const real = fs.realpathSync(DAEMON_PATH);
         const root = path.join(os.homedir(), ".ecorelay");
-        if (!real.startsWith(root + path.sep) && real !== root) {
+        const rel = path.relative(root, real);
+        if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
+            // inside root — ok
+        } else {
             console.warn("[ecorelay] daemon path escapes ~/.ecorelay, not spawning");
             return;
         }
@@ -482,10 +485,11 @@ function spawnHubDaemon(): void {
         const child = spawn(process.execPath, ["run", DAEMON_PATH], {
             detached: true, windowsHide: true, stdio: "ignore",
             env: {
-                // System essentials (Windows — missing these → daemon won't start)
+                // System essentials (Windows/Linux — missing these → daemon won't start)
                 SystemRoot: process.env.SystemRoot,
                 PATH: process.env.PATH,
                 USERPROFILE: process.env.USERPROFILE,
+                HOME: process.env.HOME,
                 TEMP: process.env.TEMP, TMP: process.env.TMP,
                 // EcoRelay — inherit, never hardcode (BC8)
                 ...(process.env.ECORELAY_WS_PORT ? { ECORELAY_WS_PORT: process.env.ECORELAY_WS_PORT } : {}),
