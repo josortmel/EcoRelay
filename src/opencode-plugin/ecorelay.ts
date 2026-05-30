@@ -184,7 +184,10 @@ function ensurePeer(session: SessionInfo): void {
     };
     peerBySession.set(session.id, conn);
 
-    lazyConnect(session.id).catch(() => scheduleReconnect(session.id));
+    lazyConnect(session.id).catch((err) => {
+        console.warn("[ecorelay] initial WS connect failed:", err instanceof Error ? err.message : String(err));
+        scheduleReconnect(session.id);
+    });
 }
 
 function removePeer(sessionId: string): void {
