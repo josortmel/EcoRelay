@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { spawn } from "node:child_process";
 import type { PluginInput, Hooks } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
-import { spawn } from "node:child_process";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -454,11 +454,44 @@ function scheduleReconnect(sessionId: string): void {
 
 function spawnHubDaemon(): void {
     if (_hubSpawned) return;
+
+    // VS1 + BC9: validate DAEMON_PATH before spawning
+    if (!DAEMON_PATH.endsWith(".ts")) {
+        console.warn("[ecorelay] daemon path must end with .ts, not spawning");
+        return;
+    }
+    if (!fs.existsSync(DAEMON_PATH)) {
+        console.error("[ecorelay] daemon not found at", DAEMON_PATH, "- is EcoRelay installed?");
+        return;
+    }
+    try {
+        const real = fs.realpathSync(DAEMON_PATH);
+        const root = path.join(os.homedir(), ".ecorelay");
+        if (!real.startsWith(root + path.sep) && real !== root) {
+            console.warn("[ecorelay] daemon path escapes ~/.ecorelay, not spawning");
+            return;
+        }
+    } catch {
+        console.warn("[ecorelay] cannot resolve daemon path, not spawning");
+        return;
+    }
+
+    console.log("[ecorelay] spawning hub daemon at", DAEMON_PATH);
     _hubSpawned = true;
     try {
         const child = spawn(process.execPath, ["run", DAEMON_PATH], {
             detached: true, windowsHide: true, stdio: "ignore",
-            env: { ...process.env, ECORELAY_WS_PORT: "9376" },
+            env: {
+                // System essentials (Windows — missing these → daemon won't start)
+                SystemRoot: process.env.SystemRoot,
+                PATH: process.env.PATH,
+                USERPROFILE: process.env.USERPROFILE,
+                TEMP: process.env.TEMP, TMP: process.env.TMP,
+                // EcoRelay — inherit, never hardcode (BC8)
+                ...(process.env.ECORELAY_WS_PORT ? { ECORELAY_WS_PORT: process.env.ECORELAY_WS_PORT } : {}),
+                ...(process.env.ECORELAY_WS_TOKEN ? { ECORELAY_WS_TOKEN: process.env.ECORELAY_WS_TOKEN } : {}),
+                ...(process.env.ECORELAY_DAEMON_PATH ? { ECORELAY_DAEMON_PATH: process.env.ECORELAY_DAEMON_PATH } : {}),
+            },
         });
         child.unref();
         child.on("error", () => { _hubSpawned = false; });
