@@ -191,6 +191,7 @@ function ensurePeer(session: SessionInfo): void {
 
     lazyConnect(session.id).catch((err) => {
         console.warn("[ecorelay] initial WS connect failed:", err instanceof Error ? err.message : String(err));
+        spawnHubDaemon();
         scheduleReconnect(session.id);
     });
 }
@@ -448,7 +449,10 @@ function scheduleReconnect(sessionId: string): void {
 
     conn.reconnectTimeout = setTimeout(() => {
         conn.reconnectTimeout = null;
-        lazyConnect(sessionId).catch(() => scheduleReconnect(sessionId));
+        lazyConnect(sessionId).catch(() => {
+            spawnHubDaemon();
+            scheduleReconnect(sessionId);
+        });
     }, delay);
 }
 
@@ -607,10 +611,11 @@ async function lazyConnect(sessionId: string): Promise<void> {
             clearTimeout(timeout);
             if (!conn.registered) {
                 reject(new Error("WS closed before ack"));
+            } else {
+                scheduleReconnect(sessionId);
             }
             conn.ws = null;
             conn.registered = false;
-            scheduleReconnect(sessionId);
         };
 
         ws.onerror = (): void => {
@@ -1015,6 +1020,7 @@ function cleanup(): void {
     pendingRequests.clear();
     _client = null;
     projectDirectory = "";
+    _hubSpawned = false;
     reqIdCounter = 0;
 }
 
