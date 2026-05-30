@@ -40,11 +40,12 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ### Multi-Platform (v0.7.6)
 
-Cross-CLI messaging between Claude Code and OpenCode via a shared Hub daemon. All 19 `relay_*` tools available on both platforms. Open a CC session and an OC session — they see each other, send messages, broadcast.
+Cross-CLI messaging between Claude Code and OpenCode via a shared Hub daemon. Claude Code: full support. OpenCode: beta — plugin loads and tools appear, Hub connection in progress.
 
 **Installation:**
 ```bash
-bash scripts/install.sh
+git clone https://github.com/josortmel/eco-relay
+cd eco-relay && bash scripts/install.sh
 ```
 
 One command. Installs everything. Open Claude Code or OpenCode — done.
@@ -96,7 +97,7 @@ One command. Installs everything. Open Claude Code or OpenCode — done.
 | Platform               | Status               |
 | ---------------------- | -------------------- |
 | Claude Code CLI        | Full support         |
-| OpenCode               | Full support (v0.7.6) |
+| OpenCode               | Beta (v0.7.6) |
 | Other AI CLI platforms | Planned (v1.0)       |
 
 Eco Relay ships as a Claude Code plugin. The hub and bridge layers are already platform-agnostic — extending to other CLI-based AI assistants (Codex, Antigravity, Cursor, and other agentic harnesses) is the design goal for v1.0.
@@ -106,6 +107,15 @@ Eco Relay ships as a Claude Code plugin. The hub and bridge layers are already p
 Requires [Bun](https://bun.sh) and Claude Code 2.1.80+.
 
 > **Windows users**: Bun must be installed on Windows natively, not inside WSL. Claude Code runs as a Windows process and needs `bun` accessible from PowerShell/CMD. Install with: `powershell -c "irm bun.sh/install.ps1 | iex"`
+
+### Quick install (CC + OC)
+
+```bash
+git clone https://github.com/josortmel/eco-relay
+cd eco-relay && bash scripts/install.sh
+```
+
+### Claude Code only (marketplace)
 
 ### 1. Add the marketplace
 
