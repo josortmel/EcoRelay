@@ -192,7 +192,7 @@ describe("Event handler", () => {
 
         await expect(
             hooks.event!({
-                event: { type: "session.status", properties: { info: { id: "s1" }, status: "busy" } } as any,
+                event: { type: "session.status", properties: { sessionID: "s1", status: "busy" } } as any,
             }),
         ).resolves.toBeUndefined();
     });
