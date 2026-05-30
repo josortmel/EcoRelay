@@ -184,12 +184,7 @@ function ensurePeer(session: SessionInfo): void {
     };
     peerBySession.set(session.id, conn);
 
-    if (cachedName) {
-        lazyConnect(session.id).catch((err) => {
-            console.error("[ecorelay] ensurePeer lazyConnect failed:", err instanceof Error ? err.message : String(err));
-            scheduleReconnect(session.id);
-        });
-    }
+    lazyConnect(session.id).catch(() => scheduleReconnect(session.id));
 }
 
 function removePeer(sessionId: string): void {
