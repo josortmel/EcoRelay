@@ -22,7 +22,7 @@ type PeerConn = {
 type SessionInfo = {
     id: string;
     title?: string | null;
-    parentId?: string | null;
+    parentID?: string | null;
 };
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -162,8 +162,13 @@ function savePeerId(
 function ensurePeer(session: SessionInfo): void {
     if (peerBySession.has(session.id)) return;
 
+    function safeName(raw: string): string | null {
+        const t = raw.trim();
+        return (t && t.length <= 64 && /^[A-Za-z0-9._-]+$/.test(t)) ? t : null;
+    }
+
     const cachedName = projectDirectory ? loadPeerId(projectDirectory, session.id) : null;
-    const initialName = cachedName ?? session.title ?? session.id;
+    const initialName = (cachedName && safeName(cachedName)) ?? safeName(session.title ?? "") ?? session.id;
 
     const conn: PeerConn = {
         sessionId: session.id,
@@ -1069,7 +1074,7 @@ export const server = async (input: PluginInput): Promise<Hooks> => {
                 console.warn("[ecorelay] unexpected session list shape", typeof result);
             } else {
                 for (const s of sessions) {
-                    if (!s.parentId) ensurePeer(s);
+                    if (!s.parentID) ensurePeer(s);
                 }
             }
         } catch (e) {
@@ -1087,16 +1092,16 @@ export const server = async (input: PluginInput): Promise<Hooks> => {
 
         event: async ({ event }) => {
             if (event.type === "session.created") {
-                const session = (event.properties as any)?.session;
+                const session = (event.properties as any)?.info;
                 if (typeof session !== "object" || !session || typeof session.id !== "string") {
                     console.warn("[ecorelay] invalid session.created event properties", event.properties);
-                } else if (session.parentId) {
+                } else if (session.parentID) {
                     // child session — skip silently
                 } else {
                     ensurePeer(session);
                 }
             } else if (event.type === "session.deleted") {
-                const sid = (event.properties as any)?.sessionID;
+                const sid = (event.properties as any)?.info?.id;
                 if (typeof sid === "string") {
                     removePeer(sid);
                 } else {
