@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { PluginInput, Hooks } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
+import { spawn } from "node:child_process";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -56,6 +57,10 @@ const sessionStatus = new Map<string, "busy" | "idle">();
 let projectDirectory = "";
 let _client: PluginInput["client"] | null = null;
 let reqIdCounter = 0;
+
+const DAEMON_PATH = process.env.ECORELAY_DAEMON_PATH
+    ?? path.join(os.homedir(), ".ecorelay", "src", "hub-daemon.ts");
+let _hubSpawned = false;
 
 // Safe crypto.randomUUID with crypto.getRandomValues() fallback for Node <19
 function randomUUID(): string {
@@ -447,6 +452,20 @@ function scheduleReconnect(sessionId: string): void {
     }, delay);
 }
 
+function spawnHubDaemon(): void {
+    if (_hubSpawned) return;
+    _hubSpawned = true;
+    try {
+        const child = spawn(process.execPath, ["run", DAEMON_PATH], {
+            detached: true, windowsHide: true, stdio: "ignore",
+            env: { ...process.env, ECORELAY_WS_PORT: "9376" },
+        });
+        child.unref();
+        child.on("error", () => { _hubSpawned = false; });
+        setTimeout(() => { _hubSpawned = false; }, 30_000);
+    } catch { _hubSpawned = false; }
+}
+
 async function lazyConnect(sessionId: string): Promise<void> {
     const conn = peerBySession.get(sessionId);
     if (!conn || conn.closed) return;
@@ -559,6 +578,7 @@ async function lazyConnect(sessionId: string): Promise<void> {
 
         ws.onerror = (): void => {
             clearTimeout(timeout);
+            spawnHubDaemon();
             reject(new Error("WS connection error"));
         };
     });
