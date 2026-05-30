@@ -50,7 +50,6 @@ function addMessageSender(conn: PeerConn, key: string, value: string): void {
 // ── Module state ───────────────────────────────────────────────────
 
 const peerBySession = new Map<string, PeerConn>();
-const sessionStatus = new Map<string, "busy" | "idle">();
 // Module-level mutable state: set by server() on init. OC runs one project per process,
 // so cross-project leakage is not a practical concern. peerBySession sharing across
 // multiple server() calls is intentional (one Hub connection per process).
@@ -468,13 +467,12 @@ function spawnHubDaemon(): void {
         console.error("[ecorelay] daemon not found at", DAEMON_PATH, "- is EcoRelay installed?");
         return;
     }
+    let bin: string;
     try {
-        const real = fs.realpathSync(DAEMON_PATH);
+        bin = fs.realpathSync(DAEMON_PATH);
         const root = path.join(os.homedir(), ".ecorelay");
-        const rel = path.relative(root, real);
-        if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
-            // inside root — ok
-        } else {
+        const rel = path.relative(root, bin);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) {
             console.warn("[ecorelay] daemon path escapes ~/.ecorelay, not spawning");
             return;
         }
@@ -483,10 +481,10 @@ function spawnHubDaemon(): void {
         return;
     }
 
-    console.log("[ecorelay] spawning hub daemon at", DAEMON_PATH);
+    console.log("[ecorelay] spawning hub daemon at", bin);
     _hubSpawned = true;
     try {
-        const child = spawn(process.execPath, ["run", DAEMON_PATH], {
+        const child = spawn(process.execPath, ["run", bin], {
             detached: true, windowsHide: true, stdio: "ignore",
             env: {
                 // System essentials (Windows/Linux — missing these → daemon won't start)
@@ -1092,11 +1090,6 @@ export const server = async (input: PluginInput): Promise<Hooks> => {
                     removePeer(sid);
                 } else {
                     console.warn("[ecorelay] invalid session.deleted event properties", event.properties);
-                }
-            } else if (event.type === "session.status") {
-                const props = (event.properties as any);
-                if (typeof props?.sessionID === "string") {
-                    sessionStatus.set(props.sessionID, props.status === "busy" ? "busy" : "idle");
                 }
             }
         },

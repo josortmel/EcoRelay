@@ -186,17 +186,6 @@ describe("Event handler", () => {
         ).resolves.toBeUndefined();
     });
 
-    test("session.status handler does not crash", async () => {
-        const input = mockPluginInput();
-        const hooks = await server(input as any);
-
-        await expect(
-            hooks.event!({
-                event: { type: "session.status", properties: { sessionID: "s1", status: "busy" } } as any,
-            }),
-        ).resolves.toBeUndefined();
-    });
-
     test("concurrent session.created events with .info API", async () => {
         const input = mockPluginInput();
         const hooks = await server(input as any);
