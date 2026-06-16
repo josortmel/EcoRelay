@@ -3,12 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/josortmel/eco-relay/releases/tag/v0.8.0"><img src="https://img.shields.io/badge/release-v0.8.0-orange" alt="Release"></a>
+  <a href="https://github.com/josortmel/EcoRelay/releases/latest"><img src="https://img.shields.io/github/v/release/josortmel/EcoRelay?color=f37513&label=release" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License"></a>
   <img src="https://img.shields.io/badge/TypeScript-Bun-f5f5f5" alt="TypeScript + Bun">
   <img src="https://img.shields.io/badge/MCP-19%20tools-0d9488" alt="MCP Tools">
   <img src="https://img.shields.io/badge/platform-Claude%20Code-7c3aed" alt="Claude Code">
   <img src="https://img.shields.io/badge/platform-OpenCode-0284c7" alt="OpenCode">
+  <img src="https://img.shields.io/badge/platform-GitHub%20Copilot-2ea043" alt="GitHub Copilot">
 </p>
 
 Inter-session messaging for AI coding assistants. Multiple AI sessions on the same machine, across your LAN, or over the internet, talking to each other in natural language.
@@ -40,13 +41,14 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ## Platform support
 
-| Platform | Status |
-| --- | --- |
-| Claude Code | Full support |
-| OpenCode | Full support |
+| Platform                                 | Status         |
+| ---------------------------------------- | -------------- |
+| Claude Code                              | Full support   |
+| OpenCode                                 | Full support   |
+| GitHub Copilot CLI                       | Full support   |
 | Codex, Antigravity, Cline, Aider, Cursor | Planned (v1.0) |
 
-Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376). Both talk to the same Hub daemon. The first session to open (either platform) spawns the Hub; the other connects.
+Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376); GitHub Copilot CLI via its extension. All three talk to the same Hub daemon. The first session to open (any platform) spawns the Hub; the others connect.
 
 <p align="center">
   <img src="docs/images/platforms.png" alt="Platform support — Claude Code and OpenCode unlocked, others coming" width="100%">
@@ -111,12 +113,30 @@ Detects Claude Code and OpenCode, installs everything. Dependencies auto-install
 claude --dangerously-skip-permissions --dangerously-load-development-channels plugin:relay@eco-relay
 ```
 
-| Flag | Why |
-| --- | --- |
+| Flag                                      | Why                                         |
+| ----------------------------------------- | ------------------------------------------- |
 | `--dangerously-load-development-channels` | Enables push notifications between sessions |
-| `--dangerously-skip-permissions` | Skips confirmation prompts on tool calls |
+| `--dangerously-skip-permissions`          | Skips confirmation prompts on tool calls    |
 
 Without these flags, the plugin connects but incoming messages never arrive and every tool call asks for confirmation.
+
+### Copilot CLI
+
+The quick install also detects [GitHub Copilot CLI](https://github.com/github/copilot-cli) and installs the EcoRelay extension to `~/.copilot/extensions/ecorelay/extension.mjs`.
+
+Copilot loads extensions only in experimental mode:
+
+```bash
+copilot --experimental
+```
+
+The setting persists in Copilot's config after the first launch. Each Copilot process hosts a single foreground session and registers as one peer (`copilot-<dir>`).
+
+The extension connects to a Hub that is already running, and auto-starts one on first connect if both Bun (`~/.bun/bin/bun.exe`) and EcoRelay (`~/.ecorelay`) are installed. If neither is present, open a Claude Code or OpenCode session first (either spawns the Hub), or start it manually:
+
+```bash
+~/.bun/bin/bun.exe run ~/.ecorelay/src/hub-daemon.ts
+```
 
 Open two sessions in different directories and try the examples below.
 
@@ -133,27 +153,27 @@ Rename your session: `/relay-rename backend-api` or just say _"call yourself bac
 
 ### Tools
 
-| Tool | What it does |
-| --- | --- |
-| `relay_peers` | List active sessions |
-| `relay_send` | Send a persistent message (online push or offline queue) |
-| `relay_inbox` | Read your mailbox (offline messages waiting for you) |
-| `relay_reply` | Answer an incoming message (auto-detects ask vs send) |
-| `relay_broadcast` | Message every peer; replies stream back |
-| `relay_rename` | Rename this session |
-| `relay_join` | Join an ephemeral room |
-| `relay_leave` | Leave a room |
-| `relay_room` | Send a message to all room members |
-| `relay_rooms` | List rooms and their members |
-| `relay_group_create` | Create a persistent group |
-| `relay_group_invite` | Invite a peer (admin only) |
-| `relay_group_remove` | Remove a member with reason (admin only) |
-| `relay_group_leave` | Leave a group |
-| `relay_group_send` | Send message; stored and delivered to online members |
-| `relay_group_history` | Read unread messages (advances cursor) |
-| `relay_group_list` | List your groups with unread counts |
-| `relay_group_info` | Group details: admin, members, online status |
-| `relay_group_delete` | Delete group and history (admin only) |
+| Tool                  | What it does                                             |
+| --------------------- | -------------------------------------------------------- |
+| `relay_peers`         | List active sessions                                     |
+| `relay_send`          | Send a persistent message (online push or offline queue) |
+| `relay_inbox`         | Read your mailbox (offline messages waiting for you)     |
+| `relay_reply`         | Answer an incoming message (auto-detects ask vs send)    |
+| `relay_broadcast`     | Message every peer; replies stream back                  |
+| `relay_rename`        | Rename this session                                      |
+| `relay_join`          | Join an ephemeral room                                   |
+| `relay_leave`         | Leave a room                                             |
+| `relay_room`          | Send a message to all room members                       |
+| `relay_rooms`         | List rooms and their members                             |
+| `relay_group_create`  | Create a persistent group                                |
+| `relay_group_invite`  | Invite a peer (admin only)                               |
+| `relay_group_remove`  | Remove a member with reason (admin only)                 |
+| `relay_group_leave`   | Leave a group                                            |
+| `relay_group_send`    | Send message; stored and delivered to online members     |
+| `relay_group_history` | Read unread messages (advances cursor)                   |
+| `relay_group_list`    | List your groups with unread counts                      |
+| `relay_group_info`    | Group details: admin, members, online status             |
+| `relay_group_delete`  | Delete group and history (admin only)                    |
 
 ### Fixed identity
 
@@ -253,34 +273,35 @@ LAN and internet can coexist: add both `peers` (TCP) and `relay` (WebSocket) to 
 
 ## Roadmap
 
-| Version | Status | What |
-| --- | --- | --- |
-| v0.2 | Released | Ephemeral rooms |
-| v0.3 | Released | Persistent groups with offline delivery |
-| v0.4 | Released | LAN federation (TCP bridge) |
-| v0.5 | Released | Claude Code plugin packaging |
-| v0.6 | Released | Persistent direct messaging (mailbox) |
-| v0.7 | Released | Internet federation (WebSocket relay) |
-| v0.8 | Current | Multi-platform: Claude Code + OpenCode unified |
-| v0.9 | Next | Installer tooling, relay stop/restart, debt cleanup |
-| v1.0 | Planned | Platform-agnostic: adapter layer for all agentic harnesses |
+| Version | Status   | What                                                       |
+| ------- | -------- | ---------------------------------------------------------- |
+| v0.2    | Released | Ephemeral rooms                                            |
+| v0.3    | Released | Persistent groups with offline delivery                    |
+| v0.4    | Released | LAN federation (TCP bridge)                                |
+| v0.5    | Released | Claude Code plugin packaging                               |
+| v0.6    | Released | Persistent direct messaging (mailbox)                      |
+| v0.7    | Released | Internet federation (WebSocket relay)                      |
+| v0.8    | Released | Multi-platform: Claude Code + OpenCode unified             |
+| v0.8.5  | Current  | GitHub Copilot CLI as a first-class peer                   |
+| v0.9    | Next     | Installer tooling, relay stop/restart, debt cleanup        |
+| v1.0    | Planned  | Platform-agnostic: adapter layer for all agentic harnesses |
 
 ## Error codes
 
-| Code | Meaning |
-| --- | --- |
-| `name_taken` | Name already in use |
-| `not_registered` | Tool used before registering |
+| Code                 | Meaning                             |
+| -------------------- | ----------------------------------- |
+| `name_taken`         | Name already in use                 |
+| `not_registered`     | Tool used before registering        |
 | `already_registered` | Same socket tried to register twice |
-| `bad_msg` | Malformed payload |
-| `bad_args` | Wrong-typed arguments |
-| `hub_unreachable` | Hub socket not responding |
-| `protocol_mismatch` | Version mismatch; restart the hub |
-| `mailbox_error` | Disk I/O failure in mailbox storage |
-| `not_member` | Not a member of the group |
-| `not_admin` | Not the group admin |
-| `group_not_found` | Group does not exist |
-| `unexpected` | Generic fallback |
+| `bad_msg`            | Malformed payload                   |
+| `bad_args`           | Wrong-typed arguments               |
+| `hub_unreachable`    | Hub socket not responding           |
+| `protocol_mismatch`  | Version mismatch; restart the hub   |
+| `mailbox_error`      | Disk I/O failure in mailbox storage |
+| `not_member`         | Not a member of the group           |
+| `not_admin`          | Not the group admin                 |
+| `group_not_found`    | Group does not exist                |
+| `unexpected`         | Generic fallback                    |
 
 ## Debugging
 
@@ -293,6 +314,8 @@ pkill -f hub-daemon.ts && rm -f "$DATA/hub.sock"   # force reset
 ```
 
 MCP plugin logs: `~/Library/Caches/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (macOS), `%LOCALAPPDATA%\claude-cli-nodejs\<project-slug>\mcp-logs-*/` (Windows), or `~/.cache/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (Linux).
+
+Copilot CLI extension log: `~/.eco-relay/logs/copilot-extension.log` (the extension cannot write to stdout — that channel is JSON-RPC — so all diagnostics go here).
 
 **Common issues**:
 

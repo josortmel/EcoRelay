@@ -139,7 +139,26 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════
-# 6. Verify
+# 6. Copilot CLI extension (if Copilot detected)
+# ══════════════════════════════════════════════════════════════════════
+COPILOT_DIR="$HOME/.copilot"
+COPILOT_EXT_DIR="$COPILOT_DIR/extensions/ecorelay"
+COPILOT_EXT="$COPILOT_EXT_DIR/extension.mjs"
+if [ -d "$COPILOT_DIR" ] || command -v copilot &>/dev/null; then
+    if [ -L "$COPILOT_EXT_DIR" ]; then
+        echo "ERROR: $COPILOT_EXT_DIR is a symlink, refusing"
+        exit 1
+    fi
+    # No package.json: @github/copilot-sdk is auto-resolved by the CLI, no ws dep.
+    mkdir -p "$COPILOT_EXT_DIR"
+    cp -P "$REPO_DIR/src/copilot-extension/ecorelay.mjs" "$COPILOT_EXT"
+    echo "  Copilot extension ✓ (launch with: copilot --experimental)"
+else
+    echo "  Copilot not detected — skipped"
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# 7. Verify
 # ══════════════════════════════════════════════════════════════════════
 echo ""
 echo "Verifying..."
@@ -160,6 +179,7 @@ check "~/.ecorelay" "$INSTALL_DIR/src/hub/index.ts" "$MARKER"
 [ -d "$CC_MP" ] && check "CC marketplace" "$CC_MP/src/hub/index.ts" "$MARKER"
 [ -d "${CC_CACHE:-/nonexistent}" ] && check "CC cache" "$CC_CACHE/src/hub/index.ts" "$MARKER"
 [ -f "$OC_PLUGIN_DIR/ecorelay.ts" ] && check "OC plugin" "$OC_PLUGIN_DIR/ecorelay.ts" "spawnHubDaemon"
+[ -f "$COPILOT_EXT" ] && check "Copilot extension" "$COPILOT_EXT" "joinSession"
 
 if [ "$FAIL" -eq 0 ]; then
     echo ""
