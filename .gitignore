@@ -7,3 +7,8 @@ node_modules/
 relay-config.json
 .faro/
 dist/
+
+# internal planning docs — never public
+refactor_*.md
+*_plan.md
+*_spec.md
