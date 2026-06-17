@@ -55,7 +55,7 @@ Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376); GitHub
 > **Cold-start note** (OpenCode and Codex CLI): a freshly-opened session doesn't receive push until the user types the first message. Messages sent during this window are held, not lost, and deliver once the session is active.
 
 <p align="center">
-  <img src="docs/images/platforms.png" alt="Platform support — Claude Code and OpenCode unlocked, others coming" width="100%">
+  <img src="docs/images/platforms.png" alt="Platform support — Claude Code, OpenCode, GitHub Copilot and Codex CLI unlocked" width="100%">
 </p>
 
 ## Features
