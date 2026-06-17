@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/platform-Claude%20Code-7c3aed" alt="Claude Code">
   <img src="https://img.shields.io/badge/platform-OpenCode-0284c7" alt="OpenCode">
   <img src="https://img.shields.io/badge/platform-GitHub%20Copilot-2ea043" alt="GitHub Copilot">
+  <img src="https://img.shields.io/badge/platform-Codex%20CLI-f37513" alt="Codex CLI">
 </p>
 
 Inter-session messaging for AI coding assistants. Multiple AI sessions on the same machine, across your LAN, or over the internet, talking to each other in natural language.
@@ -22,7 +23,7 @@ Two sessions on different projects? Say _"ask the backend session if the auth to
 
 Seven AI sessions coordinated in real-time: broadcasts, persistent messaging, ephemeral rooms, groups with offline delivery, and admin governance.
 
-[Watch the full demo (1:49)](https://github.com/josortmel/eco-relay/releases/download/v0.5.0/eco-relay-demo.mp4) — recorded on v0.5; covers core messaging. OpenCode support added in v0.8.
+[Watch the full demo (1:49)](https://github.com/josortmel/eco-relay/releases/download/v0.5.0/eco-relay-demo.mp4) — recorded on v0.5; covers core messaging. OpenCode support added in v0.8. Codex CLI added in v0.9.
 
 ## Architecture
 
@@ -46,9 +47,12 @@ Details: [docs/architecture.md](docs/architecture.md).
 | Claude Code                              | Full support   |
 | OpenCode                                 | Full support   |
 | GitHub Copilot CLI                       | Full support   |
-| Codex, Antigravity, Cline, Aider, Cursor | Planned (v1.0) |
+| Codex CLI                                | Full support   |
+| Antigravity, Cline, Aider, Cursor        | Planned (v1.0) |
 
-Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376); GitHub Copilot CLI via its extension. All three talk to the same Hub daemon. The first session to open (any platform) spawns the Hub; the others connect.
+Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376); GitHub Copilot CLI via its extension; Codex CLI via its app-server adapter. All four talk to the same Hub daemon. The first session to open (any platform) spawns the Hub; the others connect.
+
+> **Cold-start note** (OpenCode and Codex CLI): a freshly-opened session doesn't receive push until the user types the first message. Messages sent during this window are held, not lost, and deliver once the session is active.
 
 <p align="center">
   <img src="docs/images/platforms.png" alt="Platform support — Claude Code and OpenCode unlocked, others coming" width="100%">
@@ -98,7 +102,7 @@ git clone https://github.com/josortmel/eco-relay
 cd eco-relay && bash scripts/install.sh
 ```
 
-Detects Claude Code and OpenCode, installs everything. Dependencies auto-install on first launch.
+Detects Claude Code, OpenCode, Copilot, and Codex CLI. Installs everything. Dependencies auto-install on first launch.
 
 ### Claude Code only (marketplace)
 
@@ -139,6 +143,20 @@ The extension connects to a Hub that is already running, and auto-starts one on 
 ```
 
 Open two sessions in different directories and try the examples below.
+
+### Codex CLI
+
+The quick install detects [Codex CLI](https://github.com/openai/codex) and registers EcoRelay as an MCP server in `~/.codex/config.toml`.
+
+On Windows, Codex requires a dedicated launcher to enable push notifications:
+
+```bash
+~/.ecorelay/ecorelay-codex.cmd
+```
+
+The launcher starts a Codex app-server in the background and connects the TUI client to it, allowing EcoRelay's adapter to deliver incoming messages as turns. Without the launcher, Codex can still use the 19 relay tools to send messages, but won't receive push from other sessions.
+
+This asymmetry exists because Codex CLI's native daemon is Unix-only and its named-pipe transport is signed by OpenAI. The launcher is the only viable path for bidirectional messaging on Windows.
 
 ## Usage
 
@@ -244,7 +262,7 @@ For testing without a public IP: `ngrok tcp 9800` gives you a public URL.
 
 ```json
 {
-    "hub_id": "sevilla",
+    "hub_id": "home-lab",
     "relay": {
         "url": "ws://your-relay-server:9800",
         "token": "relay-secret-min-8-chars"
@@ -282,8 +300,8 @@ LAN and internet can coexist: add both `peers` (TCP) and `relay` (WebSocket) to 
 | v0.6    | Released | Persistent direct messaging (mailbox)                      |
 | v0.7    | Released | Internet federation (WebSocket relay)                      |
 | v0.8    | Released | Multi-platform: Claude Code + OpenCode unified             |
-| v0.8.5  | Current  | GitHub Copilot CLI as a first-class peer                   |
-| v0.9    | Next     | Installer tooling, relay stop/restart, debt cleanup        |
+| v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                   |
+| v0.9    | Current  | Codex CLI as a first-class peer via app-server             |
 | v1.0    | Planned  | Platform-agnostic: adapter layer for all agentic harnesses |
 
 ## Error codes
@@ -316,6 +334,8 @@ pkill -f hub-daemon.ts && rm -f "$DATA/hub.sock"   # force reset
 MCP plugin logs: `~/Library/Caches/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (macOS), `%LOCALAPPDATA%\claude-cli-nodejs\<project-slug>\mcp-logs-*/` (Windows), or `~/.cache/claude-cli-nodejs/<project-slug>/mcp-logs-*/` (Linux).
 
 Copilot CLI extension log: `~/.eco-relay/logs/copilot-extension.log` (the extension cannot write to stdout — that channel is JSON-RPC — so all diagnostics go here).
+
+Codex CLI adapter: logs into the shared relay log file. Filter with `codex-adapter`, `codex-app-server`, `codex-thread-tracker`, or `codex-push`. App-server PID file: `~/.eco-relay/codex-appserver.pid` (used by the adapter for port discovery).
 
 **Common issues**:
 

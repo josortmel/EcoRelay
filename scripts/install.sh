@@ -24,7 +24,7 @@ echo "  bun: $BUN"
 copy_src() {
     local dest="$1"
     mkdir -p "$dest/src"
-    for dir in hub shared opencode-plugin channel relay-server integration; do
+    for dir in hub shared opencode-plugin channel relay-server integration codex-adapter; do
         if [ -d "$REPO_DIR/src/$dir" ]; then
             mkdir -p "$dest/src/$dir"
             cp -rP "$REPO_DIR/src/$dir/"* "$dest/src/$dir/"
@@ -158,7 +158,52 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════
-# 7. Verify
+# 7. Codex CLI adapter (if Codex detected)
+# ══════════════════════════════════════════════════════════════════════
+CODEX_BIN=""
+if command -v codex &>/dev/null; then
+    CODEX_BIN=$(command -v codex)
+elif [ -d "$HOME/AppData/Local/OpenAI/Codex" ]; then
+    CODEX_BIN="detected"
+fi
+
+if [ -n "$CODEX_BIN" ]; then
+    CODEX_ADAPTER_DIR="$INSTALL_DIR/src/codex-adapter"
+    if [ -d "$REPO_DIR/src/codex-adapter" ]; then
+        mkdir -p "$CODEX_ADAPTER_DIR"
+        cp -rP "$REPO_DIR/src/codex-adapter/"*.ts "$CODEX_ADAPTER_DIR/"
+    fi
+
+    # Install launcher scripts
+    cp -P "$REPO_DIR/scripts/ecorelay-codex.cmd" "$INSTALL_DIR/ecorelay-codex.cmd"
+    cp -P "$REPO_DIR/scripts/ecorelay-codex-launch.ts" "$INSTALL_DIR/ecorelay-codex-launch.ts"
+
+    # Register MCP server in Codex config.toml (if config dir exists)
+    CODEX_CONFIG="$HOME/.codex/config.toml"
+    if [ -d "$HOME/.codex" ]; then
+        if ! grep -q 'mcp_servers.ecorelay' "$CODEX_CONFIG" 2>/dev/null; then
+            ADAPTER_PATH=$(cygpath -w "$INSTALL_DIR/src/codex-adapter/index.ts" 2>/dev/null || echo "$INSTALL_DIR/src/codex-adapter/index.ts")
+            BUN_WIN=$(cygpath -w "$BUN" 2>/dev/null || echo "$BUN")
+            cat >> "$CODEX_CONFIG" << TOMLEOF
+
+[mcp_servers.ecorelay]
+command = '$BUN_WIN'
+args = ["run", '$ADAPTER_PATH']
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+TOMLEOF
+            echo "  Codex config.toml → [mcp_servers.ecorelay] ✓"
+        else
+            echo "  Codex config.toml → [mcp_servers.ecorelay] already present"
+        fi
+    fi
+    echo "  Codex adapter ✓ (launch with: ecorelay-codex.cmd or ~/.ecorelay/ecorelay-codex.cmd)"
+else
+    echo "  Codex not detected — skipped"
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# 8. Verify
 # ══════════════════════════════════════════════════════════════════════
 echo ""
 echo "Verifying..."
@@ -180,6 +225,7 @@ check "~/.ecorelay" "$INSTALL_DIR/src/hub/index.ts" "$MARKER"
 [ -d "${CC_CACHE:-/nonexistent}" ] && check "CC cache" "$CC_CACHE/src/hub/index.ts" "$MARKER"
 [ -f "$OC_PLUGIN_DIR/ecorelay.ts" ] && check "OC plugin" "$OC_PLUGIN_DIR/ecorelay.ts" "spawnHubDaemon"
 [ -f "$COPILOT_EXT" ] && check "Copilot extension" "$COPILOT_EXT" "joinSession"
+[ -f "$INSTALL_DIR/src/codex-adapter/index.ts" ] && check "Codex adapter" "$INSTALL_DIR/src/codex-adapter/index.ts" "AppServerClient"
 
 if [ "$FAIL" -eq 0 ]; then
     echo ""

@@ -1,10 +1,10 @@
 # EcoRelay — Guía del proyecto
 
-> Última actualización: 2026-05-30 (v0.8.0). Actualizar al final de cada sesión.
+> Última actualización: 2026-06-17 (v0.9.0). Actualizar al final de cada sesión.
 
 ## Qué es
 
-Mensajería entre sesiones de IA en la misma máquina o red. Claude Code, OpenCode, y futuros CLI hablan entre sí en lenguaje natural a través de un Hub central. 19 tools MCP. Mensajes persistentes, grupos, salas, federación LAN e internet.
+Mensajería entre sesiones de IA en la misma máquina o red. Claude Code, OpenCode, Copilot CLI y Codex CLI hablan entre sí en lenguaje natural a través de un Hub central. 19 tools MCP. Mensajes persistentes, grupos, salas, federación LAN e internet.
 
 ## Cómo funciona (el flujo de un mensaje)
 
@@ -52,19 +52,42 @@ Un solo archivo (~1400 líneas). Maneja múltiples sesiones OC (una por tab). In
 - Auto-spawn del daemon (`spawnHubDaemon`, process.execPath)
 - Validación de DAEMON_PATH + env allowlist (no hereda API keys)
 
+### 4. Adaptador Codex CLI (`src/codex-adapter/`) — modular, 7 archivos
+
+MCP server que conecta el Hub con Codex. A diferencia de CC/OC/Copilot, **Codex no tiene gancho de push in-process para terceros** (su daemon nativo es Unix-only; su named-pipe está firmado por OpenAI; no hay inyección vía MCP). Por eso necesita un **launcher** y un app-server aparte.
+
+**Topología (Windows)** — `scripts/ecorelay-codex.cmd` → `ecorelay-codex-launch.ts` arranca DOS procesos:
+1. `codex app-server --listen ws://127.0.0.1:PORT` (backend, oculto). **El adapter MCP corre AQUÍ** (los MCP servers de config.toml cargan en el backend, no en el cliente TUI).
+2. `codex --remote ws://127.0.0.1:PORT` (TUI cliente). Comparte backend con #1 → el push del adapter llega al hilo del TUI.
+
+El adapter empuja haciendo `turn/start` contra el app-server (al que se conecta como otro cliente WS).
+
+**Gotchas críticos descubiertos en vivo (2026-06-17) — NO romper:**
+- **El adapter descubre el puerto del app-server leyendo `~/.eco-relay/codex-appserver.pid`** ({pid, port} que escribe el launcher). NO depende de la env var: **Codex NO propaga el env del proceso al MCP child** — solo pasa lo que esté en `config.toml [mcp_servers.X.env]`. Poner `ECORELAY_CODEX_APP_SERVER` en el spawn NO llega al adapter.
+- **El transporte MCP (`server.connect`) se registra ANTES** de conectar al app-server + `tracker.discover()` (que reintenta hasta 30s). Si discover bloquea el arranque → `startup_timeout_sec` (20s) mata el MCP. App-server connect + discovery van en BACKGROUND (IIFE).
+- **El adapter se auto-mata al cerrar el padre** (`server.onclose` / `process.stdin` 'end'/'close' → `parent_gone_exiting`). Sin esto queda HUÉRFANO vivo conectado al Hub = peer zombie.
+- **config.toml: rutas Windows con comillas SIMPLES** (literal TOML). Comillas dobles → `\U` de `\Users` = escape unicode → parseo roto. (Las entradas nativas tipo node_repl usan comillas simples por esto.)
+- **Cold-start**: codex recién abierto no tiene hilo hasta que el usuario teclea → push retenido (no perdido) hasta que el poll (60s) descubre el hilo → `onThreadChanged` llama `notifyThreadAvailable` para vaciar el buffer. Compartido con OC.
+
+**Sonda research** (`src/channel/codex-beta-ping.ts`): probe env-gated (`ECORELAY_CODEX_BETA_PING`) que usa `elicitInput` para investigar push MCP. No-op por defecto. Es del channel CC, de la fase de plan.
+
 ## Dependencias entre módulos
 
 ```
 hub-daemon.ts → hub/index.ts → registry, mailbox, groups, ws-endpoint, handlers/*, bridge
 main.ts → channel/index.ts → bootstrap, register, hub-connection, reconnect, routing, tools/*
-ecorelay.ts → (standalone, no importa de channel/ ni hub/)
+ecorelay.ts → (standalone OC, no importa de channel/ ni hub/)
+ecorelay.mjs → (standalone Copilot, no importa de channel/ ni hub/)
+codex-adapter/index.ts → identity, hub-client, app-server-client, thread-tracker, push, tools, instructions
 hub-spawner.ts → (shared: lo usan channel/bootstrap.ts y potencialmente ecorelay.ts)
 protocol.ts → (shared: define ClientMsg/ServerMsg, lo importan hub y channel)
 framing.ts → (shared: readLines/writeLine sobre sockets)
 data-dir.ts → (shared: resuelve paths ~/.eco-relay, CLAUDE_PLUGIN_DATA)
 ```
 
-**ecorelay.ts es independiente**: no importa nada de `channel/` ni `hub/`. Tiene su propia implementación de todo. Es un monolito por diseño (OC plugins son un solo archivo).
+**ecorelay.ts y ecorelay.mjs son independientes**: no importan nada de `channel/` ni `hub/`. Monolitos por diseño.
+
+**codex-adapter/ es modular**: 7 archivos TS. Importa `channel/tool-schemas/` y `protocol.ts`. Push via Codex app-server `turn/start` (WS). Requiere launcher (`ecorelay-codex.cmd`) para arrancar app-server + codex --remote.
 
 ## Cómo se despliega
 
@@ -101,6 +124,8 @@ Archivos que deben coincidir:
 | `.claude-plugin/marketplace.json` | plugins[0].version |
 | `src/opencode-plugin/ecorelay.ts` | PLUGIN_VERSION |
 | `src/copilot-extension/ecorelay.mjs` | PLUGIN_VERSION |
+| `src/codex-adapter/index.ts` | Server version |
+| `src/codex-adapter/app-server-client.ts` | clientInfo version |
 | `README.md` | badge + refs |
 
 Si no coinciden, el deploy falla silenciosamente (CC busca una versión en cache que no existe).
@@ -141,6 +166,12 @@ Baseline: **488-489/489**. 1 known-fail (socket-recovery). Si baja de 488 → re
 | Pre-commit hook falla con 72 errores        | `bun run check` → eslint src completo       | --no-verify (deuda: arreglar hook o los 72 errores)  |
 | Daemon no se apaga                          | Peers conectados lo mantienen vivo          | Cerrar todos los CLI → 10s idle → exit               |
 | Push reactivo no funciona (OC no reacciona) | session.prompt falla o token inválido       | Verificar hub-ws-token existe + WS :9376 escucha     |
+| Codex en `mode:tools-only` (envía pero no recibe push) | adapter sin app-server URL (env no propagada) | El adapter lee el puerto del pid file; verificar `~/.eco-relay/codex-appserver.pid` y log `app_server_from_pidfile` |
+| Codex MCP `timed out after 20s` al arrancar | `discover()` bloquea antes de `server.connect` | Transporte MCP primero, app-server connect en background (ya en index.ts) |
+| Codex deja peers zombis al cerrar | adapter huérfano (no se auto-mata) | Verificar `parent_gone_exiting` en el log; auto-muerte por stdin close (index.ts) |
+| Codex `error loading config.toml ... unicode value` | ruta Windows con comillas dobles en config.toml | Comillas SIMPLES (literal TOML) en command/args |
+| Codex no recibe push hasta teclear | cold-start: sin hilo activo hasta primer input | Comportamiento esperado (compartido con OC); el push se retiene y entra al descubrir hilo (poll 60s) |
+| Codex no arranca / `.cmd` se cierra de golpe | error en launcher/adapter antes del TUI | Correr a mano `~/.bun/bin/bun.exe run ~/.ecorelay/ecorelay-codex-launch.ts` para ver el error |
 
 ## Decisiones de arquitectura (por qué las cosas son así)
 
@@ -150,8 +181,11 @@ Baseline: **488-489/489**. 1 known-fail (socket-recovery). Si baja de 488 → re
 - **Bootstrap simétrico**: CC y OC ambos pueden spawnear el Hub. El primero gana, el otro conecta. No importa el orden.
 - **Push reactivo sin noReply**: decisión de producto (Pepe). El agente receptor procesa y reacciona automáticamente. Superficie de prompt injection aceptada como deuda (salvaguarda = trabajo adversarial + límites agénticos).
 - **Token auth WS (no Unix socket)**: Unix socket ya está protegido por permisos del filesystem (solo el usuario). WS es TCP → necesita auth explícita.
+- **Codex requiere launcher (asimetría asumida)**: en Windows no hay forma de que un tercero pushee a un codex TUI normal (daemon Unix-only, named-pipe OpenAI-firmado, sin inyección MCP). Verificado primera mano. Única vía = launcher que arranca `codex app-server --listen` + `codex --remote`. Pepe lo aceptó en previsión de un futuro dashboard de control de EcoRelay que lanzaría Codex. Encaja ahí.
+- **Codex: descubrimiento por pid file (no env)**: porque Codex no propaga el env del proceso a los MCP children. El adapter lee el puerto del pid file que escribe el launcher. Sin puerto fijo, sin env var.
+- **codex-adapter modular (no monolito como OC/Copilot)**: 7 archivos TS. Reutiliza `channel/tool-schemas/` + `protocol.ts`. Se pudo modularizar porque usa el SDK MCP estándar (no la API de plugin de un harness concreto).
 
-## Deuda conocida (v0.8.0)
+## Deuda conocida (v0.9.0)
 
 | Deuda                                          | Severidad       | Contexto                                                             |
 | ---------------------------------------------- | --------------- | -------------------------------------------------------------------- |
@@ -160,7 +194,13 @@ Baseline: **488-489/489**. 1 known-fail (socket-recovery). Si baja de 488 → re
 | Pre-commit hook: 72 eslint errors              | MEDIUM          | Sesión de lint/prettier pendiente                                    |
 | OC sessions: no auto-register hasta activación | LOW             | Limitación de OpenCode, no de relay                                  |
 | INSTRUCTIONS_MARKER: sigue en v0.7.6           | LOW             | Es marcador de protocolo, no display                                 |
-| bump-version.sh: no existe                     | LOW             | Versiones se alinean a mano (5 archivos)                             |
+| bump-version.sh: no existe                     | LOW             | Versiones se alinean a mano (8 archivos ahora)                       |
+| Codex launcher (asimetría con CC/OC/Copilot)   | ACCEPTED (Pepe) | Inherente a Codex en Windows; encaja en futuro dashboard EcoRelay    |
+| Codex cold-start: no recibe hasta primer input | ACCEPTED        | Compartido con OC. Mejora futura: bajar poll interval cuando no hay hilo |
+| Codex peer naming `codex-.ecorelay`            | LOW             | cwd = dir de instalación; afinar para reflejar el proyecto del usuario |
+| codex-adapter security residuales              | ACCEPTED        | Single-user/loopback (VS40, VS48-deep, VS35, VS18, VS25...) — re-evaluar si multi-user |
+| Backport VS1 (escape ambos tags) a OC          | OPEN            | `opencode-plugin/ecorelay.ts` tiene el bug single-tag; codex ya lo arregla |
+| codex-beta-ping (channel CC, env-gated)        | LOW             | Sonda research de la fase de plan; no-op por defecto                 |
 
 ## Estructura de archivos
 
@@ -190,6 +230,17 @@ src/
 │   └── tool-schemas/           #   Tool definitions
 ├── opencode-plugin/            # Plugin OC (monolito)
 │   └── ecorelay.ts             #   ~1400 líneas, todo incluido
+├── copilot-extension/          # Extension Copilot CLI (monolito)
+│   └── ecorelay.mjs            #   ~1337 líneas, JS puro
+├── codex-adapter/              # Adaptador Codex CLI (modular, 7 archivos)
+│   ├── index.ts                #   Entry MCP server, orquesta lifecycle
+│   ├── identity.ts             #   Peer naming, cwd, git branch, cache
+│   ├── hub-client.ts           #   WS al Hub, protocol v5, reconnect
+│   ├── app-server-client.ts    #   WS al app-server Codex, turn/start
+│   ├── thread-tracker.ts       #   Descubre y sigue el thread activo
+│   ├── push.ts                 #   Hub msg → batch → wrapUntrusted → turn/start
+│   ├── tools.ts                #   19 relay tools sobre hub-client
+│   └── instructions.ts         #   MCP instructions para el modelo
 ├── shared/
 │   └── hub-spawner.ts          #   spawnDetachedDaemon, tryConnect
 ├── relay-server/

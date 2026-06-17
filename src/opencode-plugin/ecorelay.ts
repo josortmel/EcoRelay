@@ -284,7 +284,7 @@ function formatGroup(msg: Record<string, unknown>): string {
 
 // ── Version ────────────────────────────────────────────────────────
 
-const PLUGIN_VERSION = "0.8.5";
+const PLUGIN_VERSION = "0.9.0";
 
 function isNewer(a: string, b: string): boolean {
     const ap = a.split(".").map(Number);

@@ -12,6 +12,7 @@ import {
 import { makeLogger } from "../logger";
 import { type ServerMsg } from "../protocol";
 import { bootstrapHub, type HubRole } from "./bootstrap";
+import { maybeScheduleCodexBetaPing } from "./codex-beta-ping";
 import { createMcpServer, wireToolHandlers } from "./mcp-server";
 import { createPendingBroadcasts } from "./pending-broadcasts";
 import { createReconnector } from "./reconnect";
@@ -133,6 +134,7 @@ export async function startChannel(opts: StartChannelOptions = {}): Promise<Chan
         CAPABILITIES as Record<string, unknown>,
         INSTRUCTIONS,
     );
+    maybeScheduleCodexBetaPing(server, () => name);
 
     const emitNotification = buildEmitNotification({
         onNotification: opts.onNotification,
