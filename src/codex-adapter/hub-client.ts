@@ -8,7 +8,7 @@ import { suffixedName, savePeerId } from "./identity";
 const log = makeLogger("codex-hub");
 
 const PROTOCOL_VERSION = "5";
-const HUB_WS_URL = process.env.ECORELAY_WS_URL ?? "ws://127.0.0.1:9376";
+const HUB_WS_URL = process.env.ECORELAY_WS_URL ?? "ws://127.0.0.1:19736";
 const MAX_RECONNECT_ATTEMPTS = 50;
 const INITIAL_RECONNECT_MS = 3_000;
 const MAX_RECONNECT_MS = 60_000;

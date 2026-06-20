@@ -4,6 +4,19 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [0.9.1] — 2026-06-20
+
+Hotfix: recovery after a Windows dynamic port-range reservation broke the WS endpoint and a fatal bridge bind crashed the Hub.
+
+### Fixed
+
+- **WS default port 9376 → 19736 across the Hub and all clients.** Windows (winnat/Hyper-V/WSL) dynamically reserves TCP port ranges (9317–9716 on the affected machine) and reassigns them on reboot; binding 9376 failed with `WSAEACCES`, silently taking down cross-CLI messaging while leaving `netstat` empty. Updated `hub-daemon.ts`, `shared/hub-spawner.ts`, `codex-adapter/hub-client.ts`, `opencode-plugin/ecorelay.ts`, and `copilot-extension/ecorelay.mjs`.
+- **Bridge bind failure is now non-fatal** (`hub/bridge.ts`): a federation `server.listen` error (excluded or in-use port) no longer crashes the Hub serving local clients — it logs a hint and continues. Previously an unhandled `'error'` event took down the whole Hub on startup.
+
+### Added
+
+- **`ECORELAY_IDLE_MS=0` knob** (`hub-daemon.ts`): suppress the idle-exit so a manually launched canonical Hub stays alive.
+
 ## [0.7.6] — 2026-05-30
 
 Bootstrap symmetry, lock file, push URL auto-discovery, version check, install unified. 490 tests, zero debt.

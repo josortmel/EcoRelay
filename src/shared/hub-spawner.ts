@@ -301,10 +301,10 @@ export async function bootstrapHub(
 export async function spawnDetachedDaemon(
     socketPath: string,
 ): Promise<{ close: () => Promise<void> }> {
-    const rawPort = Number(process.env.ECORELAY_WS_PORT || "9376");
+    const rawPort = Number(process.env.ECORELAY_WS_PORT || "19736");
     const defaultWsPort = Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
         ? rawPort
-        : 9376;
+        : 19736;
     const handle = spawnHub(socketPath, defaultWsPort);
     return { close: () => handle.close() };
 }

@@ -153,6 +153,14 @@ export function createBridge(config: BridgeConfig, registry: PeerRegistry) {
         });
 
         const bindAddr = config.bind ?? "0.0.0.0";
+        server.on("error", (err: Error) => {
+            log.error("bridge_listen_failed", {
+                port: config.listen,
+                bind: bindAddr,
+                err: err.message,
+                hint: "bridge port may be in a Windows excluded range (netsh int ipv4 show excludedportrange tcp) or in use; hub continues serving local clients without federation",
+            });
+        });
         server.listen(config.listen, bindAddr, () => {
             log.info("bridge_listening", { port: config.listen, bind: bindAddr });
         });
