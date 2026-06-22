@@ -1,17 +1,23 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { initLogger, makeLogger } from "../logger";
-import { resolveCwd, getGitBranch, initialPeerName, updateCwdFromThread, savePeerId } from "./identity";
-import { HubClient } from "./hub-client";
 import { AppServerClient } from "./app-server-client";
-import { ThreadTracker } from "./thread-tracker";
-import { PushRouter } from "./push";
-import { getToolSchemas, callTool, type ToolResult } from "./tools";
+import { HubClient } from "./hub-client";
+import {
+    getGitBranch,
+    initialPeerName,
+    resolveCwd,
+    savePeerId,
+    updateCwdFromThread,
+} from "./identity";
 import { INSTRUCTIONS } from "./instructions";
+import { PushRouter } from "./push";
+import { ThreadTracker } from "./thread-tracker";
+import { callTool, getToolSchemas, type ToolResult } from "./tools";
 
 initLogger();
 const log = makeLogger("codex-adapter");
@@ -97,7 +103,7 @@ async function main(): Promise<void> {
     // ── MCP server ────────────────────────────────────────────────
 
     const server = new Server(
-        { name: "ecorelay", version: "0.9.1" },
+        { name: "ecorelay", version: "1.0.0" },
         {
             capabilities: {
                 tools: {},
@@ -154,14 +160,15 @@ async function main(): Promise<void> {
     if (appServer) {
         void (async () => {
             try {
-                await appServer!.connect();
-                await appServer!.initialize();
+                if (!appServer || !tracker || !pushRouter) return;
+                await appServer.connect();
+                await appServer.initialize();
                 log.info("app_server_connected", { url: appServerUrl });
 
-                const threadId = await tracker!.discover();
+                const threadId = await tracker.discover();
                 if (threadId) {
                     log.info("thread_discovered", { threadId });
-                    pushRouter!.notifyThreadAvailable();
+                    pushRouter.notifyThreadAvailable();
                 } else {
                     log.warn("no_thread_found", {
                         hint: "Push will activate when a thread appears (polling every 60s).",

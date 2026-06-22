@@ -11,6 +11,8 @@
   <img src="https://img.shields.io/badge/platform-OpenCode-0284c7" alt="OpenCode">
   <img src="https://img.shields.io/badge/platform-GitHub%20Copilot-2ea043" alt="GitHub Copilot">
   <img src="https://img.shields.io/badge/platform-Codex%20CLI-f37513" alt="Codex CLI">
+  <img src="https://img.shields.io/badge/platform-Antigravity-4285f4" alt="Antigravity CLI">
+  <img src="https://img.shields.io/badge/platform-Cursor%20CLI-00bfff" alt="Cursor CLI">
 </p>
 
 Inter-session messaging for AI coding assistants. Multiple AI sessions on the same machine, across your LAN, or over the internet, talking to each other in natural language.
@@ -42,17 +44,19 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ## Platform support
 
-| Platform                                 | Status         |
-| ---------------------------------------- | -------------- |
-| Claude Code                              | Full support   |
-| OpenCode                                 | Full support   |
-| GitHub Copilot CLI                       | Full support   |
-| Codex CLI                                | Full support   |
-| Antigravity, Cline, Aider, Cursor        | Planned (v1.0) |
+| Platform                    | Status                                 |
+| --------------------------- | -------------------------------------- |
+| Claude Code                 | Full support                           |
+| OpenCode                    | Full support                           |
+| GitHub Copilot CLI          | Full support                           |
+| Codex CLI                   | Full support                           |
+| Antigravity CLI (`agy`)     | Full support                           |
+| Cursor CLI (`cursor-agent`) | Send/respond ✓ · idle push (see notes) |
+| Cline, Aider                | Planned (v1.0)                         |
 
-Claude Code connects via Unix socket; OpenCode via WebSocket (port 9376); GitHub Copilot CLI via its extension; Codex CLI via its app-server adapter. All four talk to the same Hub daemon. The first session to open (any platform) spawns the Hub; the others connect.
+Claude Code connects via Unix socket; OpenCode via WebSocket (port 19736); GitHub Copilot CLI via its extension; Codex CLI via its app-server adapter; Antigravity CLI via its `agentapi` adapter; Cursor CLI via its MCP adapter + background-shell notification. All six talk to the same Hub daemon. The first session to open (Claude Code or OpenCode) spawns the Hub; the others connect.
 
-> **Cold-start note** (OpenCode and Codex CLI): a freshly-opened session doesn't receive push until the user types the first message. Messages sent during this window are held, not lost, and deliver once the session is active.
+> **Cold-start note** (OpenCode, Codex CLI, and Antigravity CLI): a freshly-opened session doesn't receive push until it has an active conversation (type the first message to open one). Messages sent during this window are held, not lost, and deliver once the session is active.
 
 <p align="center">
   <img src="docs/images/platforms.png" alt="Platform support — Claude Code, OpenCode, GitHub Copilot and Codex CLI unlocked" width="100%">
@@ -102,7 +106,7 @@ git clone https://github.com/josortmel/eco-relay
 cd eco-relay && bash scripts/install.sh
 ```
 
-Detects Claude Code, OpenCode, Copilot, and Codex CLI. Installs everything. Dependencies auto-install on first launch.
+Detects Claude Code, OpenCode, Copilot, Codex CLI, Antigravity CLI, and Cursor CLI. Installs everything. Dependencies auto-install on first launch.
 
 ### Claude Code only (marketplace)
 
@@ -123,6 +127,18 @@ claude --dangerously-skip-permissions --dangerously-load-development-channels pl
 | `--dangerously-skip-permissions`          | Skips confirmation prompts on tool calls    |
 
 Without these flags, the plugin connects but incoming messages never arrive and every tool call asks for confirmation.
+
+### OpenCode
+
+The quick install also detects [OpenCode](https://opencode.ai) and installs the EcoRelay plugin to `~/.config/opencode/plugins/ecorelay.ts`.
+
+Just launch OpenCode normally:
+
+```bash
+opencode
+```
+
+Each OpenCode tab is a separate session and registers as its own peer (`<dir>`). OpenCode connects to the Hub over WebSocket; the first Claude Code or OpenCode session to open spawns the Hub. Push is reactive — incoming messages arrive as a new turn. (OpenCode sessions don't auto-register until first activated; open the chat to appear in `relay_peers`.)
 
 ### Copilot CLI
 
@@ -157,6 +173,47 @@ On Windows, Codex requires a dedicated launcher to enable push notifications:
 The launcher starts a Codex app-server in the background and connects the TUI client to it, allowing EcoRelay's adapter to deliver incoming messages as turns. Without the launcher, Codex can still use the 19 relay tools to send messages, but won't receive push from other sessions.
 
 This asymmetry exists because Codex CLI's native daemon is Unix-only and its named-pipe transport is signed by OpenAI. The launcher is the only viable path for bidirectional messaging on Windows.
+
+### Antigravity CLI
+
+The quick install detects [Antigravity CLI](https://antigravity.google) (`agy`) and registers EcoRelay as an MCP server in `~/.gemini/config/mcp_config.json`.
+
+Just relaunch `agy` normally:
+
+```bash
+agy
+```
+
+On launch, `agy` spawns the EcoRelay adapter, which provides the 19 relay tools (so `agy` can reply) **and** pushes incoming messages into the live session as real turns. No dedicated launcher is needed — the adapter delivers push through Antigravity's official `agy agentapi send-message`, a client of `agy`'s in-process Language Server (it handles auth itself, so there's no mTLS to configure).
+
+After installing or updating, **relaunch `agy`** so it reloads the adapter. The session registers as `agy-<workspace>`.
+
+### Cursor CLI
+
+The quick install detects [Cursor CLI](https://cursor.com/docs/cli/overview) (`cursor-agent`) and registers EcoRelay as an MCP server in `~/.cursor/mcp.json`. After installing, approve it once:
+
+```bash
+agent mcp enable ecorelay
+```
+
+**Send/respond** works out of the box: launch `cursor-agent` normally and it gets the 19 relay tools and registers as `cursor-<workspace>`.
+
+```bash
+agent
+```
+
+**Idle push** (receiving messages while idle) uses Cursor's native background-shell notification, which requires the `long_running_jobs` feature flag. The installer sets `CURSOR_STATSIG_OVERRIDES` as a persistent user environment variable so you don't have to pass it each time. If you need to set it manually (or the installer couldn't):
+
+```powershell
+# PowerShell — persist for the user (run once):
+[Environment]::SetEnvironmentVariable('CURSOR_STATSIG_OVERRIDES','{"featureFlags":{"long_running_jobs":true}}','User')
+# …or per-launch:
+$env:CURSOR_STATSIG_OVERRIDES = '{"featureFlags":{"long_running_jobs":true}}'; agent
+```
+
+With the flag active, ask the agent once per session to arm the listener as a background task watching `^ECORELAY_MSG` (fire-and-forget); incoming relay messages then wake the idle session as autonomous turns. The adapter writes incoming messages to `~/.cursor/ecorelay-inbox.jsonl` and `src/cursor-adapter/relay-listener.ts` surfaces them.
+
+> **Notes.** Cursor's free plan limits models to `auto`; idle push needs an active model. BYOK/DeepSeek configured in the Cursor IDE does **not** propagate to `cursor-agent` (the CLI only accepts its server model allowlist).
 
 ## Usage
 
@@ -291,18 +348,19 @@ LAN and internet can coexist: add both `peers` (TCP) and `relay` (WebSocket) to 
 
 ## Roadmap
 
-| Version | Status   | What                                                       |
-| ------- | -------- | ---------------------------------------------------------- |
-| v0.2    | Released | Ephemeral rooms                                            |
-| v0.3    | Released | Persistent groups with offline delivery                    |
-| v0.4    | Released | LAN federation (TCP bridge)                                |
-| v0.5    | Released | Claude Code plugin packaging                               |
-| v0.6    | Released | Persistent direct messaging (mailbox)                      |
-| v0.7    | Released | Internet federation (WebSocket relay)                      |
-| v0.8    | Released | Multi-platform: Claude Code + OpenCode unified             |
-| v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                   |
-| v0.9    | Current  | Codex CLI as a first-class peer via app-server             |
-| v1.0    | Planned  | Platform-agnostic: adapter layer for all agentic harnesses |
+| Version | Status   | What                                                    |
+| ------- | -------- | ------------------------------------------------------- |
+| v0.2    | Released | Ephemeral rooms                                         |
+| v0.3    | Released | Persistent groups with offline delivery                 |
+| v0.4    | Released | LAN federation (TCP bridge)                             |
+| v0.5    | Released | Claude Code plugin packaging                            |
+| v0.6    | Released | Persistent direct messaging (mailbox)                   |
+| v0.7    | Released | Internet federation (WebSocket relay)                   |
+| v0.8    | Released | Multi-platform: Claude Code + OpenCode unified          |
+| v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                |
+| v0.9    | Released | Codex CLI as a first-class peer via app-server          |
+| v0.9.1  | Released | Antigravity CLI as a first-class peer via `agentapi`    |
+| v1.0.0  | Current  | Six-CLI universal relay: + Antigravity CLI + Cursor CLI |
 
 ## Error codes
 
@@ -336,6 +394,8 @@ MCP plugin logs: `~/Library/Caches/claude-cli-nodejs/<project-slug>/mcp-logs-*/`
 Copilot CLI extension log: `~/.eco-relay/logs/copilot-extension.log` (the extension cannot write to stdout — that channel is JSON-RPC — so all diagnostics go here).
 
 Codex CLI adapter: logs into the shared relay log file. Filter with `codex-adapter`, `codex-app-server`, `codex-thread-tracker`, or `codex-push`. App-server PID file: `~/.eco-relay/codex-appserver.pid` (used by the adapter for port discovery).
+
+Antigravity CLI adapter: logs into the shared relay log file. Filter with `antigravity-adapter`, `antigravity-hub`, `antigravity-push`, `antigravity-backend`, or `antigravity-discovery`. The adapter discovers `agy`'s Language Server port and active conversation from `~/.gemini/antigravity-cli/log/cli-*.log`.
 
 **Common issues**:
 

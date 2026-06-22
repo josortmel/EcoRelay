@@ -61,9 +61,7 @@ export class AppServerClient {
     private reqIdCounter = 0;
     private readonly pending = new Map<number, PendingRequest>();
     private readonly onNotification: ((n: AppServerNotification) => void) | undefined;
-    private readonly onThreadStatusChanged:
-        | ((e: ThreadStatusChangedEvent) => void)
-        | undefined;
+    private readonly onThreadStatusChanged: ((e: ThreadStatusChangedEvent) => void) | undefined;
     private readonly onCloseCallback: (() => void) | undefined;
 
     constructor(opts: AppServerClientOptions) {
@@ -79,8 +77,7 @@ export class AppServerClient {
         if (this.closed) return;
         if (
             this.ws &&
-            (this.ws.readyState === WebSocket.OPEN ||
-                this.ws.readyState === WebSocket.CONNECTING)
+            (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
         ) {
             return;
         }
@@ -94,7 +91,11 @@ export class AppServerClient {
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 connectSettled = true;
-                try { ws.close(); } catch { /* ignore */ }
+                try {
+                    ws.close();
+                } catch {
+                    /* ignore */
+                }
                 this.ws = null;
                 reject(new Error("app-server connection timeout"));
             }, 10_000);
@@ -131,7 +132,7 @@ export class AppServerClient {
             clientInfo: {
                 name: "ecorelay-codex-adapter",
                 title: "EcoRelay Codex Adapter",
-                version: "0.9.1",
+                version: "1.0.0",
             },
             capabilities: {
                 experimentalApi: true,
@@ -287,7 +288,8 @@ export class AppServerClient {
             const obj = msg as Record<string, unknown>;
 
             if (obj.id !== undefined && this.pending.has(obj.id as number)) {
-                const p = this.pending.get(obj.id as number)!;
+                const p = this.pending.get(obj.id as number);
+                if (!p) return;
                 clearTimeout(p.timer);
                 this.pending.delete(obj.id as number);
                 if (obj.error) {
@@ -299,10 +301,7 @@ export class AppServerClient {
             }
 
             if (typeof obj.method === "string") {
-                if (
-                    obj.method === "thread/status/changed" &&
-                    this.onThreadStatusChanged
-                ) {
+                if (obj.method === "thread/status/changed" && this.onThreadStatusChanged) {
                     const params = obj.params as Record<string, unknown> | undefined;
                     if (
                         params &&
@@ -331,7 +330,11 @@ export class AppServerClient {
         this.initialized = false;
         for (const [, entry] of this.pending) {
             clearTimeout(entry.timer);
-            try { entry.reject(new Error("connection lost")); } catch { /* ignore */ }
+            try {
+                entry.reject(new Error("connection lost"));
+            } catch {
+                /* ignore */
+            }
         }
         this.pending.clear();
         this.onCloseCallback?.();

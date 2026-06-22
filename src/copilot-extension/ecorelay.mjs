@@ -17,7 +17,7 @@ import * as path from "node:path";
 // ── Constants ──────────────────────────────────────────────────────
 
 const PROTOCOL_VERSION = "5";
-const PLUGIN_VERSION = "0.9.1";
+const PLUGIN_VERSION = "1.0.0";
 const HUB_WS_URL = process.env.ECORELAY_WS_URL ?? "ws://127.0.0.1:19736";
 const MAX_RECONNECT_ATTEMPTS = 50;
 const INITIAL_RECONNECT_MS = 3_000;

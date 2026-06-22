@@ -4,6 +4,24 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [1.0.0] — 2026-06-22
+
+Six-CLI universal relay. Every major agentic CLI talks to every other — Claude Code, OpenCode, GitHub Copilot, Codex CLI, Antigravity CLI, and Cursor CLI.
+
+### Added
+
+- **Antigravity CLI adapter** (`src/antigravity-adapter/`, 8 files): connects Google's `agy` to the Hub via official `agy agentapi send-message` (gRPC Language Server client). Conversation discovery from live session log — not stale `last_conversations.json`. Connect-only (does not spawn Hub). Circuit breaker (`MAX_SEND_FAILURES=5`). Multi-line JSON stdout parsing. E2E verified 2026-06-20.
+- **Cursor CLI adapter** (`src/cursor-adapter/`, 6 files): connects Cursor's `cursor-agent` to the Hub. Respond path verified E2E (19 relay tools, peer visibility). Push idle via background shell + `output_notification` — the only native channel that wakes an idle Cursor session. Inbox at `~/.cursor/ecorelay-inbox.jsonl`; `relay-listener.ts` emits `ECORELAY_MSG` per message.
+- **Cursor CLI platform badge** in README.
+- **install.sh** updated: covers all six CLIs (CC, OC, Copilot, Codex, Antigravity, Cursor).
+- **cursor-poc/**: research PoCs (ACP/headless) retained for reference alongside existing codex-poc.
+
+### Changed
+
+- Version aligned to 1.0.0 across 10 files (package.json, plugin.json, marketplace.json, ecorelay.ts OC, ecorelay.mjs Copilot, codex-adapter index + app-server-client, antigravity-adapter index, cursor-adapter index).
+- CLAUDE.md versioning table now includes `cursor-adapter/index.ts`.
+- README version table updated (v0.9.1 → Released, v1.0.0 → Current).
+
 ## [0.9.1] — 2026-06-20
 
 Hotfix: recovery after a Windows dynamic port-range reservation broke the WS endpoint and a fatal bridge bind crashed the Hub.

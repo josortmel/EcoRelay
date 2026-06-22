@@ -9,7 +9,7 @@
             "name": "relay",
             "source": "./",
             "description": "Inter-session communication for AI coding assistants — direct messaging, persistent groups, cross-machine LAN federation",
-            "version": "0.9.1"
+            "version": "1.0.0"
         }
     ]
 }

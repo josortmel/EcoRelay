@@ -24,7 +24,7 @@ echo "  bun: $BUN"
 copy_src() {
     local dest="$1"
     mkdir -p "$dest/src"
-    for dir in hub shared opencode-plugin channel relay-server integration codex-adapter; do
+    for dir in hub shared opencode-plugin channel relay-server integration codex-adapter antigravity-adapter cursor-adapter; do
         if [ -d "$REPO_DIR/src/$dir" ]; then
             mkdir -p "$dest/src/$dir"
             cp -rP "$REPO_DIR/src/$dir/"* "$dest/src/$dir/"
@@ -203,7 +203,111 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════
-# 8. Verify
+# 8. Antigravity CLI (agy) adapter (if agy detected)
+# ══════════════════════════════════════════════════════════════════════
+# The adapter source is already deployed to $INSTALL_DIR/src/antigravity-adapter
+# via copy_src. agy spawns it as an MCP server from mcp_config.json; the adapter
+# provides the relay tools (so agy can reply) and pushes incoming relay messages
+# into the live TUI via `agy agentapi send-message`.
+AGY_BIN=""
+if command -v agy &>/dev/null; then
+    AGY_BIN=$(command -v agy)
+elif [ -f "$HOME/AppData/Local/agy/bin/agy.exe" ]; then
+    AGY_BIN="$HOME/AppData/Local/agy/bin/agy.exe"
+fi
+
+if [ -n "$AGY_BIN" ]; then
+    AGY_MCP_CONFIG="$HOME/.gemini/config/mcp_config.json"
+    mkdir -p "$HOME/.gemini/config"
+    ADAPTER_PATH=$(cygpath -w "$INSTALL_DIR/src/antigravity-adapter/index.ts" 2>/dev/null || echo "$INSTALL_DIR/src/antigravity-adapter/index.ts")
+    BUN_WIN=$(cygpath -w "$BUN" 2>/dev/null || echo "$BUN")
+    MCP_WIN=$(cygpath -w "$AGY_MCP_CONFIG" 2>/dev/null || echo "$AGY_MCP_CONFIG")
+
+    # Merge mcpServers.ecorelay into mcp_config.json (preserve any existing servers)
+    "$BUN" -e "
+        const fs = require('fs');
+        const p = process.argv[1];
+        let data = {};
+        try { data = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+        if (!data || typeof data !== 'object') data = {};
+        if (!data.mcpServers) data.mcpServers = {};
+        data.mcpServers.ecorelay = {
+            command: process.argv[2],
+            args: ['run', process.argv[3]],
+            env: { ECORELAY_WS_URL: 'ws://127.0.0.1:19736' },
+        };
+        fs.writeFileSync(p, JSON.stringify(data, null, 2));
+    " "$MCP_WIN" "$BUN_WIN" "$ADAPTER_PATH"
+    echo "  Antigravity mcp_config.json → mcpServers.ecorelay ✓"
+    echo "  Antigravity adapter ✓ (relaunch agy to load)"
+else
+    echo "  Antigravity (agy) not detected — skipped"
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# 9. Cursor CLI (cursor-agent) adapter (if cursor-agent detected)
+# ══════════════════════════════════════════════════════════════════════
+# The adapter source is deployed to $INSTALL_DIR/src/cursor-adapter via copy_src.
+# cursor-agent spawns it as an MCP server from ~/.cursor/mcp.json: the adapter
+# provides the relay tools (so Cursor can reply) and writes incoming relay
+# messages to ~/.cursor/ecorelay-inbox.jsonl. Idle push works by arming the
+# relay-listener as a background shell with output_notification (needs the
+# long_running_jobs flag — set persistently below).
+CURSOR_BIN=""
+if command -v cursor-agent &>/dev/null; then
+    CURSOR_BIN=$(command -v cursor-agent)
+elif command -v agent &>/dev/null; then
+    CURSOR_BIN=$(command -v agent)
+elif [ -d "$HOME/AppData/Local/cursor-agent" ]; then
+    CURSOR_BIN="detected"
+fi
+
+if [ -n "$CURSOR_BIN" ]; then
+    CURSOR_MCP_CONFIG="$HOME/.cursor/mcp.json"
+    mkdir -p "$HOME/.cursor"
+    CURSOR_ADAPTER_PATH=$(cygpath -w "$INSTALL_DIR/src/cursor-adapter/index.ts" 2>/dev/null || echo "$INSTALL_DIR/src/cursor-adapter/index.ts")
+    BUN_WIN=$(cygpath -w "$BUN" 2>/dev/null || echo "$BUN")
+    MCP_WIN=$(cygpath -w "$CURSOR_MCP_CONFIG" 2>/dev/null || echo "$CURSOR_MCP_CONFIG")
+
+    # Merge mcpServers.ecorelay into ~/.cursor/mcp.json (preserve existing servers).
+    # Cursor requires the "type":"stdio" field for STDIO servers.
+    "$BUN" -e "
+        const fs = require('fs');
+        const p = process.argv[1];
+        let data = {};
+        try { data = JSON.parse(fs.readFileSync(p, 'utf8')); } catch {}
+        if (!data || typeof data !== 'object') data = {};
+        if (!data.mcpServers) data.mcpServers = {};
+        data.mcpServers.ecorelay = {
+            type: 'stdio',
+            command: process.argv[2],
+            args: ['run', process.argv[3]],
+            env: { ECORELAY_WS_URL: 'ws://127.0.0.1:19736' },
+        };
+        fs.writeFileSync(p, JSON.stringify(data, null, 2));
+    " "$MCP_WIN" "$BUN_WIN" "$CURSOR_ADAPTER_PATH"
+    echo "  Cursor mcp.json → mcpServers.ecorelay ✓"
+
+    # Enable the idle-push feature flag persistently (User env var) so the user
+    # doesn't have to pass --statsig-overrides on every launch. cursor-agent's
+    # QF flag resolver reads CURSOR_STATSIG_OVERRIDES before the remote value.
+    # This var is Cursor-specific; other tools ignore it.
+    CURSOR_OVERRIDES='{"featureFlags":{"long_running_jobs":true,"auto_background_foreground_tools_on_followup":true}}'
+    if command -v powershell.exe &>/dev/null; then
+        powershell.exe -NoProfile -Command "[Environment]::SetEnvironmentVariable('CURSOR_STATSIG_OVERRIDES', '$CURSOR_OVERRIDES', 'User')" &>/dev/null \
+            && echo "  Cursor CURSOR_STATSIG_OVERRIDES (long_running_jobs) → set for user ✓ (restart shell to apply)" \
+            || echo "  Cursor: could not set CURSOR_STATSIG_OVERRIDES — set it manually (see README)"
+    else
+        echo "  Cursor: set CURSOR_STATSIG_OVERRIDES manually for idle push (see README)"
+    fi
+
+    echo "  Cursor adapter ✓ (run 'agent mcp enable ecorelay' once; relaunch agent to load)"
+else
+    echo "  Cursor (cursor-agent) not detected — skipped"
+fi
+
+# ══════════════════════════════════════════════════════════════════════
+# 10. Verify
 # ══════════════════════════════════════════════════════════════════════
 echo ""
 echo "Verifying..."
@@ -226,6 +330,8 @@ check "~/.ecorelay" "$INSTALL_DIR/src/hub/index.ts" "$MARKER"
 [ -f "$OC_PLUGIN_DIR/ecorelay.ts" ] && check "OC plugin" "$OC_PLUGIN_DIR/ecorelay.ts" "spawnHubDaemon"
 [ -f "$COPILOT_EXT" ] && check "Copilot extension" "$COPILOT_EXT" "joinSession"
 [ -f "$INSTALL_DIR/src/codex-adapter/index.ts" ] && check "Codex adapter" "$INSTALL_DIR/src/codex-adapter/index.ts" "AppServerClient"
+[ -f "$INSTALL_DIR/src/antigravity-adapter/index.ts" ] && check "Antigravity adapter" "$INSTALL_DIR/src/antigravity-adapter/index.ts" "AgentApiBackend"
+[ -f "$INSTALL_DIR/src/cursor-adapter/index.ts" ] && check "Cursor adapter" "$INSTALL_DIR/src/cursor-adapter/index.ts" "ecorelay-inbox"
 
 if [ "$FAIL" -eq 0 ]; then
     echo ""
