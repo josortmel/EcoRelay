@@ -21,11 +21,9 @@ Two sessions on different projects? Say _"ask the backend session if the auth to
 
 ## Demo
 
-![Eco Relay in action](docs/eco-relay-demo.gif)
+![Eco Relay — The Wire](docs/images/ecorelay-trailer.gif)
 
-Seven AI sessions coordinated in real-time: broadcasts, persistent messaging, ephemeral rooms, groups with offline delivery, and admin governance.
-
-[Watch the full demo (1:49)](https://github.com/josortmel/eco-relay/releases/download/v0.5.0/eco-relay-demo.mp4) — recorded on v0.5; covers core messaging. OpenCode support added in v0.8. Codex CLI added in v0.9.
+Six AI coding assistants coordinated in real-time through one Hub. Broadcasts, persistent messaging, ephemeral rooms, groups with offline delivery, and admin governance.
 
 ## Architecture
 
