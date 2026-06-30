@@ -42,6 +42,10 @@ Details: [docs/architecture.md](docs/architecture.md).
 
 ## Platform support
 
+<p align="center">
+  <img src="docs/images/platforms.png" alt="Platform support — Claude Code, OpenCode, GitHub Copilot and Codex CLI unlocked" width="100%">
+</p>
+
 | Platform                    | Status                                 |
 | --------------------------- | -------------------------------------- |
 | Claude Code                 | Full support                           |
@@ -55,10 +59,6 @@ Details: [docs/architecture.md](docs/architecture.md).
 Claude Code connects via Unix socket; OpenCode via WebSocket (port 19736); GitHub Copilot CLI via its extension; Codex CLI via its app-server adapter; Antigravity CLI via its `agentapi` adapter; Cursor CLI via its MCP adapter + background-shell notification. All six talk to the same Hub daemon. The first session to open (Claude Code or OpenCode) spawns the Hub; the others connect.
 
 > **Cold-start note** (OpenCode, Codex CLI, and Antigravity CLI): a freshly-opened session doesn't receive push until it has an active conversation (type the first message to open one). Messages sent during this window are held, not lost, and deliver once the session is active.
-
-<p align="center">
-  <img src="docs/images/platforms.png" alt="Platform support — Claude Code, OpenCode, GitHub Copilot and Codex CLI unlocked" width="100%">
-</p>
 
 ## Features
 
