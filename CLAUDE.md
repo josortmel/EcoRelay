@@ -153,6 +153,14 @@ CC y OC tienen ubicaciones de código **separadas**. `scripts/install.sh` las cu
 Get-CimInstance Win32_Process -Filter "Name='bun.exe'" | Select CommandLine
 ```
 
+**Desplegar SOLO la parte de Claude Code** (lo que se hizo con la 1.0.1, 30-sep): el `install.sh`
+completo BORRA `~/.ecorelay` y reescribe las configuraciones de Codex, agy y Cursor. Para tocar
+solo CC: ejecutar la cabecera (líneas 1-42: bun + `copy_src`) y las secciones 3-5 (marketplace,
+cache/<versión>, registro), con copia previa de `installed_plugins.json`. La caché de la versión
+anterior se deja en disco: volver atrás = registro a la versión vieja + reiniciar sesiones.
+Comprobar el resultado: `Get-CimInstance Win32_Process -Filter "Name='bun.exe'"` → todos los
+`main.ts` desde `cache/<versión>` y UN SOLO `hub-daemon.ts`.
+
 **Runtime data** (no en el repo, no tocar):
 
 - `~/.eco-relay/` — hub.sock, hub-ws-token
@@ -212,6 +220,7 @@ Baseline: **488-489/489**. 1 known-fail (socket-recovery). Si baja de 488 → re
 | installed_plugins.json con path roto                                     | Rutas Git Bash (/c/) vs Windows (C:\\)                                                                                | Usar cygpath -w para convertir                                                                                      |
 | `bun` no ejecuta en bash/hook                                            | bun en PATH es shim .ps1                                                                                              | Usar ~/.bun/bin/bun.exe                                                                                             |
 | Pre-commit hook falla con 72 errores                                     | `bun run check` → eslint src completo                                                                                 | --no-verify (deuda: arreglar hook o los 72 errores)                                                                 |
+| Varios hubs a la vez al abrir muchas sesiones (registros repetidos, idle_exit) | el channel CC arrancaba el hub SIN lock (el lock de `hub-spawner` no lo usaba nadie) | v1.0.1: lock en el propio daemon (`src/hub/daemon-lock.ts`, `hub-daemon.lock` junto al socket con el pid). Log: `daemon_lock_acquired` / `daemon_lock_held` |
 | Daemon no se apaga                                                       | Peers conectados lo mantienen vivo                                                                                    | Cerrar todos los CLI → 10s idle → exit                                                                              |
 | Push reactivo no funciona (OC no reacciona)                              | session.prompt falla o token inválido                                                                                 | Verificar hub-ws-token existe + WS :19736 escucha                                                                   |
 | Codex en `mode:tools-only` (envía pero no recibe push)                   | adapter sin app-server URL (env no propagada)                                                                         | El adapter lee el puerto del pid file; verificar `~/.eco-relay/codex-appserver.pid` y log `app_server_from_pidfile` |
@@ -239,11 +248,17 @@ Baseline: **488-489/489**. 1 known-fail (socket-recovery). Si baja de 488 → re
 - **Antigravity: push via `agentapi` (vía oficial)**: agy expone el subcomando interno `agy agentapi send-message`, un cliente gRPC de su Language Server in-process que maneja auth/TLS solo. Descartados: SDK Python (spawnea su propio runtime `localharness.exe` aislado, no inyecta en el TUI), gRPC directo (mTLS), PTY y CDP (frágiles). Verificado E2E con confirmación visual de agy.
 - **Antigravity: conv activa del log, no de `last_conversations.json`**: la cache histórica va con retraso y tras relanzar apunta a conv muerta (inyectar ahí da exit 0 pero invisible). El log de la sesión actual (`cli-*.log`) es la fuente autoritativa de la conversación viva.
 
-## Deuda conocida (v1.0.0)
+## Publicar en GitHub (repo público)
+
+- Identidad (decisión de Pepe, 30-sep): autor y committer `josortmel <261964387+josortmel@users.noreply.github.com>`. GitHub no atribuye por agente.
+- `.husky/pre-push` lleva el gate de privacidad (`~/.faro/prepush`, fuera del repo; se añade a `.git/info/exclude`). Bloquea identidades, términos privados, secretos y ficheros prohibidos en lo que se sube.
+- 1.0.1 publicada: `92e8ca3..c7747bc` (30-sep). La rama local `backup/391-identidad-hilo` guarda los commits con la identidad interna; borrar cuando la 1.0.1 lleve un día sana.
+
+## Deuda conocida (v1.0.1)
 
 | Deuda                                             | Severidad       | Contexto                                                                                                                                                                                   |
 | ------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| DC2: dead code hub-spawner.ts:161-314             | LOW             | ~150 líneas (deleteLock, acquireLock, HubHandle, etc.) Pre-existente                                                                                                                       |
+| DC2: dead code hub-spawner.ts:161-314             | LOW             | ~150 líneas (deleteLock, acquireLock, HubHandle, etc.) Pre-existente. OJO: ese acquireLock NO protegía nada (el channel no lo llamaba); el lock real está en daemon-lock.ts desde la 1.0.1                                                                                                                       |
 | VS3-C5: push reactivo = injection surface         | ACCEPTED (Pepe) | Salvaguarda = adversarial + límites agénticos                                                                                                                                              |
 | Pre-commit hook: 72 eslint errors                 | MEDIUM          | Sesión de lint/prettier pendiente                                                                                                                                                          |
 | OC sessions: no auto-register hasta activación    | LOW             | Limitación de OpenCode, no de relay                                                                                                                                                        |
