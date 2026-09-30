@@ -6,7 +6,11 @@ const log = makeLogger("hub");
 
 export function probeLiveSocket(socketPath: string, timeoutMs = 200): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
-        const probe = net.createConnection(socketPath);
+        // new Socket() + handlers BEFORE connect(): net.createConnection() connects
+        // inside the call, and on Windows (Bun) an ENOENT fires before a listener
+        // can be attached — an uncaught error that kills the hub (#391).
+        const probe = new net.Socket();
+        probe.on("error", () => {});
         const done = (alive: boolean) => {
             try {
                 probe.destroy();
@@ -22,6 +26,7 @@ export function probeLiveSocket(socketPath: string, timeoutMs = 200): Promise<bo
             clearTimeout(timer);
             done(false);
         });
+        probe.connect(socketPath);
     });
 }
 

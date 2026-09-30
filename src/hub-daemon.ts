@@ -1,4 +1,5 @@
 import { hubSocketPath } from "./data-dir";
+import { acquireDaemonLock } from "./hub/daemon-lock";
 import { startHub } from "./hub/index";
 import { initLogger, makeLogger } from "./logger";
 
@@ -9,10 +10,19 @@ initLogger({ console: false });
 async function run(): Promise<void> {
     const socketPath = process.env.RELAY_HUB_SOCKET ?? hubSocketPath();
     const rawPort = Number(process.env.ECORELAY_WS_PORT || "19736");
-    const wsPort = Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
-        ? rawPort
-        : (log.warn("invalid_ws_port", { raw: process.env.ECORELAY_WS_PORT }), 19736);
+    const wsPort =
+        Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
+            ? rawPort
+            : (log.warn("invalid_ws_port", { raw: process.env.ECORELAY_WS_PORT }), 19736);
     const noIdle = process.env.ECORELAY_IDLE_MS === "0";
+    // #391: one hub per socket. A daemon that loses the lock exits cleanly
+    // WITHOUT touching the socket: the winner is (or is about to be) listening.
+    const lock = await acquireDaemonLock(socketPath);
+    if (!lock) {
+        log.info("hub_already_running", { socketPath, pid: process.pid });
+        process.exit(0);
+    }
+    process.on("exit", () => lock.release());
     const hub = await startHub({
         socketPath,
         wsPort,
