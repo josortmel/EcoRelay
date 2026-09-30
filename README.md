@@ -358,7 +358,8 @@ LAN and internet can coexist: add both `peers` (TCP) and `relay` (WebSocket) to 
 | v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                |
 | v0.9    | Released | Codex CLI as a first-class peer via app-server          |
 | v0.9.1  | Released | Antigravity CLI as a first-class peer via `agentapi`    |
-| v1.0.0  | Current  | Six-CLI universal relay: + Antigravity CLI + Cursor CLI |
+| v1.0.1  | Current  | One hub per socket: simultaneous session starts no longer kill the relay |
+| v1.0.0  | Previous | Six-CLI universal relay: + Antigravity CLI + Cursor CLI |
 
 ## Error codes
 

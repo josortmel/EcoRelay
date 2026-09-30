@@ -4,6 +4,13 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [1.0.1] — 2026-09-30
+
+### Fixed
+
+- **One hub per socket.** When several sessions opened in the same second, each one spawned a hub daemon; several hubs listened on the same socket and the relay died for everyone. The daemon now takes an exclusive lock next to the socket (holding its own pid); a daemon that loses exits cleanly without touching the socket. A lock left by a dead or hung hub is taken over safely.
+- **Stale-socket recovery could crash the hub on Windows.** The liveness probe attached its error handler after connecting; an immediate `ENOENT` became an uncaught error.
+
 ## [1.0.0] — 2026-06-22
 
 Six-CLI universal relay. Every major agentic CLI talks to every other — Claude Code, OpenCode, GitHub Copilot, Codex CLI, Antigravity CLI, and Cursor CLI.
