@@ -1,2 +1,6 @@
+# Fast, and only on what is being committed: format + lint of the staged files
+# (.lintstagedrc) and the typecheck (~3 s). The whole check used to run here on every
+# commit (~75 s, and `prettier --check .` looked at files that were not being
+# committed). The full suite runs in CI on a clean Linux, which is the judge.
 bunx lint-staged
-bun run check
+bun run typecheck
