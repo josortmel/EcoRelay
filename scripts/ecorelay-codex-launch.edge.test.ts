@@ -44,7 +44,14 @@ describe("Verifier: findFreePort edge cases", () => {
         // First confirm the port is free (skip if not)
         let isFree = true;
         const probe = net.createServer();
-        await new Promise<void>((r) => probe.once("error", () => { isFree = false; r(); }).listen(lo, "127.0.0.1", () => probe.close(r)));
+        await new Promise<void>((r) =>
+            probe
+                .once("error", () => {
+                    isFree = false;
+                    r();
+                })
+                .listen(lo, "127.0.0.1", () => probe.close(r)),
+        );
 
         if (!isFree) {
             expect(true).toBe(true); // port busy — skip
@@ -94,8 +101,12 @@ describe("Verifier: validateCodexPath edge cases", () => {
             // realpathSync(link) → resolves to target (in tmpdir, not in allowed roots)
             expect(validateCodexPath(link)).toBeNull();
         } finally {
-            try { fs.unlinkSync(link); } catch {}
-            try { fs.unlinkSync(target); } catch {}
+            try {
+                fs.unlinkSync(link);
+            } catch {}
+            try {
+                fs.unlinkSync(target);
+            } catch {}
         }
     });
 
@@ -157,7 +168,13 @@ describe("Verifier: isProcessAlive edge cases", () => {
 
 // ── buildChildEnv (debt paid: now exported) ───────────────────────
 
-import { buildChildEnv, readPidFile, writePidFile, deletePidFile, findCodexBin } from "./ecorelay-codex-launch";
+import {
+    buildChildEnv,
+    deletePidFile,
+    findCodexBin,
+    readPidFile,
+    writePidFile,
+} from "./ecorelay-codex-launch";
 
 describe("Verifier: buildChildEnv strips ECORELAY secrets (AT15)", () => {
     test("AT15a: ECORELAY_WS_TOKEN stripped from child env", () => {
@@ -250,7 +267,7 @@ describe("Verifier: ecorelay-codex.cmd structure", () => {
     test("AT18: .cmd references correct bun path (%USERPROFILE%\\.bun\\bin\\bun.exe)", () => {
         const cmd = fs.readFileSync(
             path.join(path.dirname(import.meta.path.replace("file:///", "")), "ecorelay-codex.cmd"),
-            "utf8"
+            "utf8",
         );
         expect(cmd).toContain(".bun\\bin\\bun.exe");
         expect(cmd).toContain("LAUNCHER");
@@ -259,7 +276,7 @@ describe("Verifier: ecorelay-codex.cmd structure", () => {
     test("AT19: .cmd passes all args to launcher via %* (no injection risk from args)", () => {
         const cmd = fs.readFileSync(
             path.join(path.dirname(import.meta.path.replace("file:///", "")), "ecorelay-codex.cmd"),
-            "utf8"
+            "utf8",
         );
         // %* passes args as-is to bun run; bun passes to spawn as array (no shell interpolation)
         expect(cmd).toContain("%*");

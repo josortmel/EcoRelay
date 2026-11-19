@@ -1,7 +1,7 @@
 // Verifier edge cases — T6 tools.ts + instructions.ts
 import { describe, expect, test } from "bun:test";
-import { callTool, errResult, okResult } from "./tools";
 import type { HubClient } from "./hub-client";
+import { callTool, errResult, okResult } from "./tools";
 
 // ── Mock helpers ──────────────────────────────────────────────────
 
@@ -15,22 +15,35 @@ function makeMock(response?: Record<string, unknown>): {
     const messageSenders = new Map<string, string>();
     let _name = "test-peer";
     const hub = {
-        get name() { return _name; },
+        get name() {
+            return _name;
+        },
         messageSenders,
         broadcastReceipts: new Map(),
-        sendAndWait: async (p: Record<string, unknown>) => { sends.push(p); return response ?? { type: "ack" }; },
-        fireSend: (p: Record<string, unknown>) => { fires.push(p); },
-        _setPeerName: (n: string) => { _name = n; },
+        sendAndWait: async (p: Record<string, unknown>) => {
+            sends.push(p);
+            return response ?? { type: "ack" };
+        },
+        fireSend: (p: Record<string, unknown>) => {
+            fires.push(p);
+        },
+        _setPeerName: (n: string) => {
+            _name = n;
+        },
     } as unknown as HubClient;
     return { hub, sends, fires };
 }
 
 function makeThrowingMock(): HubClient {
     return {
-        get name() { return "x"; },
+        get name() {
+            return "x";
+        },
         messageSenders: new Map(),
         broadcastReceipts: new Map(),
-        sendAndWait: async () => { throw new Error("simulated WS error"); },
+        sendAndWait: async () => {
+            throw new Error("simulated WS error");
+        },
         fireSend: () => {},
         _setPeerName: () => {},
     } as unknown as HubClient;
@@ -48,7 +61,10 @@ describe("Verifier: exact-at-boundary caps (should PASS)", () => {
     test("AT2: relay_reply with ask_id exactly 256 chars passes", async () => {
         const { hub } = makeMock({ type: "send_ack", msg_id: "m2", status: "delivered" });
         hub.messageSenders.set("a".repeat(256), "alice");
-        const result = await callTool(hub, "relay_reply", { ask_id: "a".repeat(256), text: "reply" });
+        const result = await callTool(hub, "relay_reply", {
+            ask_id: "a".repeat(256),
+            text: "reply",
+        });
         expect(result.isError).toBeUndefined();
     });
 
@@ -60,13 +76,20 @@ describe("Verifier: exact-at-boundary caps (should PASS)", () => {
 
     test("AT4: relay_group_invite with group and peer each exactly 64 chars passes", async () => {
         const { hub } = makeMock({ type: "group_ack" });
-        const result = await callTool(hub, "relay_group_invite", { group: "g".repeat(64), peer: "p".repeat(64) });
+        const result = await callTool(hub, "relay_group_invite", {
+            group: "g".repeat(64),
+            peer: "p".repeat(64),
+        });
         expect(result.isError).toBeUndefined();
     });
 
     test("AT5: relay_group_remove with reason exactly 256 chars passes", async () => {
         const { hub } = makeMock({ type: "group_ack" });
-        const result = await callTool(hub, "relay_group_remove", { group: "g", peer: "p", reason: "r".repeat(256) });
+        const result = await callTool(hub, "relay_group_remove", {
+            group: "g",
+            peer: "p",
+            reason: "r".repeat(256),
+        });
         expect(result.isError).toBeUndefined();
     });
 
@@ -106,7 +129,12 @@ describe("Verifier: group_create edge cases", () => {
 describe("Verifier: relay_send optional args", () => {
     test("AT9: reply_to and urgent=true both forwarded in payload", async () => {
         const { hub, sends } = makeMock({ type: "send_ack", msg_id: "m3", status: "delivered" });
-        await callTool(hub, "relay_send", { to: "bob", text: "hi", reply_to: "prev-msg-id", urgent: true });
+        await callTool(hub, "relay_send", {
+            to: "bob",
+            text: "hi",
+            reply_to: "prev-msg-id",
+            urgent: true,
+        });
         expect(sends[0]!.reply_to).toBe("prev-msg-id");
         expect(sends[0]!.urgent).toBe(true);
     });
@@ -122,7 +150,11 @@ describe("Verifier: relay_send optional args", () => {
     test("AT11: FIXED — relay_send enforces reply_to ≤ 256", async () => {
         const { hub } = makeMock({ type: "send_ack", msg_id: "m4", status: "delivered" });
         const longReplyTo = "x".repeat(500);
-        const result = await callTool(hub, "relay_send", { to: "bob", text: "hi", reply_to: longReplyTo });
+        const result = await callTool(hub, "relay_send", {
+            to: "bob",
+            text: "hi",
+            reply_to: longReplyTo,
+        });
         expect(result.isError).toBe(true);
     });
 });
@@ -156,7 +188,10 @@ describe("Verifier: relay_broadcast behavior", () => {
 describe("Verifier: relay_reply fallback", () => {
     test("AT15: unknown ask_id falls back to fireSend reply (not sendAndWait)", async () => {
         const { hub, sends, fires } = makeMock();
-        const result = await callTool(hub, "relay_reply", { ask_id: "unknown-ask-999", text: "ok" });
+        const result = await callTool(hub, "relay_reply", {
+            ask_id: "unknown-ask-999",
+            text: "ok",
+        });
         expect(result.isError).toBeUndefined();
         expect(sends).toHaveLength(0); // no sendAndWait called
         expect(fires[0]!.type).toBe("reply");

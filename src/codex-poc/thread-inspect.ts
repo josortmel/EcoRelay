@@ -3,12 +3,26 @@
  */
 const APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL ?? "ws://127.0.0.1:4580";
 let reqId = 0;
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void; timer: ReturnType<typeof setTimeout> }>();
+const pending = new Map<
+    number,
+    {
+        resolve: (v: unknown) => void;
+        reject: (e: unknown) => void;
+        timer: ReturnType<typeof setTimeout>;
+    }
+>();
 
-function send(ws: WebSocket, method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+function send(
+    ws: WebSocket,
+    method: string,
+    params: Record<string, unknown> = {},
+): Promise<unknown> {
     const id = ++reqId;
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); reject(new Error(`timeout: ${method}`)); }, 15_000);
+        const timer = setTimeout(() => {
+            pending.delete(id);
+            reject(new Error(`timeout: ${method}`));
+        }, 15_000);
         pending.set(id, { resolve, reject, timer });
         ws.send(JSON.stringify({ jsonrpc: "2.0", method, id, params }));
     });
@@ -27,7 +41,11 @@ async function run(): Promise<void> {
 
     ws.onmessage = (e) => {
         let msg: Record<string, unknown>;
-        try { msg = JSON.parse(String(e.data)); } catch { return; }
+        try {
+            msg = JSON.parse(String(e.data));
+        } catch {
+            return;
+        }
         if (typeof msg.id === "number" && pending.has(msg.id)) {
             const p = pending.get(msg.id)!;
             clearTimeout(p.timer);
@@ -60,13 +78,20 @@ async function run(): Promise<void> {
     }
 
     // 3. List recent threads
-    const list = (await send(ws, "thread/list", { limit: 5 })) as { data?: Array<Record<string, unknown>> };
+    const list = (await send(ws, "thread/list", { limit: 5 })) as {
+        data?: Array<Record<string, unknown>>;
+    };
     console.log("\n=== Recent threads (list) ===");
     for (const t of list?.data ?? []) {
-        console.log(`  ${t.id}: preview="${String(t.preview ?? "").slice(0, 60)}" cwd=${t.cwd ?? "?"}`);
+        console.log(
+            `  ${t.id}: preview="${String(t.preview ?? "").slice(0, 60)}" cwd=${t.cwd ?? "?"}`,
+        );
     }
 
     ws.close();
 }
 
-run().catch(e => { console.error("Fatal:", e); process.exit(1); });
+run().catch((e) => {
+    console.error("Fatal:", e);
+    process.exit(1);
+});

@@ -8,10 +8,7 @@ import { readLines, writeLine } from "../framing";
 import { startHub } from "../hub/index";
 import { PROTOCOL_VERSION } from "../protocol";
 
-const SOCKET_PATH = path.join(
-    os.tmpdir(),
-    `ecorelay-integ-${Date.now()}.sock`,
-);
+const SOCKET_PATH = path.join(os.tmpdir(), `ecorelay-integ-${Date.now()}.sock`);
 const WS_PORT = 29376;
 const HUB_WS_URL = `ws://127.0.0.1:${WS_PORT}`;
 
@@ -47,15 +44,15 @@ function unixRequest(
     });
 }
 
-function wsRegister(
-    name: string,
-    cwd = "/tmp",
-    gitBranch = "main",
-): Promise<WebSocket> {
+function wsRegister(name: string, cwd = "/tmp", gitBranch = "main"): Promise<WebSocket> {
     const token = getAuthToken();
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            try { ws.close(); } catch { /* ignore */ }
+            try {
+                ws.close();
+            } catch {
+                /* ignore */
+            }
             reject(new Error("ws timeout"));
         }, 10_000);
         const ws = new WebSocket(HUB_WS_URL);
@@ -80,7 +77,11 @@ function wsRegister(
         };
         ws.onerror = (): void => {
             clearTimeout(timer);
-            try { ws.close(); } catch { /* ignore */ }
+            try {
+                ws.close();
+            } catch {
+                /* ignore */
+            }
             reject(new Error("ws error"));
         };
     });
@@ -154,10 +155,7 @@ describe("Integration: cross-transport messaging", () => {
 
     test("send from Unix peer to WS peer delivers", async () => {
         const delivered = await new Promise<boolean>((resolve, reject) => {
-            const timer = setTimeout(
-                () => reject(new Error("timeout")),
-                10_000,
-            );
+            const timer = setTimeout(() => reject(new Error("timeout")), 10_000);
             let unixSocket: net.Socket | null = null;
 
             wsRegister("oc-echo").then((ws) => {
@@ -210,10 +208,7 @@ describe("Integration: cross-transport messaging", () => {
         let renameAck = false;
 
         const result = await new Promise<string>((resolve, reject) => {
-            const timer = setTimeout(
-                () => reject(new Error("timeout")),
-                5_000,
-            );
+            const timer = setTimeout(() => reject(new Error("timeout")), 5_000);
             ws.onmessage = (ev: MessageEvent): void => {
                 const msg = JSON.parse(ev.data.toString());
                 if (msg.type === "ack") {

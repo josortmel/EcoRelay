@@ -1,18 +1,18 @@
 // Verifier edge cases — not in plan
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-    resolveCwd,
-    updateCwdFromThread,
-    getGitBranch,
-    safeName,
-    suffixedName,
-    loadPeerId,
-    savePeerId,
-    initialPeerName,
     _resetForTest,
+    getGitBranch,
+    initialPeerName,
+    loadPeerId,
+    resolveCwd,
+    safeName,
+    savePeerId,
+    suffixedName,
+    updateCwdFromThread,
 } from "./identity";
 
 const CACHE_FILE = path.join(os.homedir(), ".cache", "ecorelay", "peer-ids.json");

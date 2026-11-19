@@ -26,7 +26,11 @@ type PendingRequest = {
 
 const pending = new Map<number, PendingRequest>();
 
-function sendRequest(ws: WebSocket, method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+function sendRequest(
+    ws: WebSocket,
+    method: string,
+    params: Record<string, unknown> = {},
+): Promise<unknown> {
     const id = nextId();
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -40,7 +44,11 @@ function sendRequest(ws: WebSocket, method: string, params: Record<string, unkno
     });
 }
 
-function sendNotification(ws: WebSocket, method: string, params: Record<string, unknown> = {}): void {
+function sendNotification(
+    ws: WebSocket,
+    method: string,
+    params: Record<string, unknown> = {},
+): void {
     const msg = JSON.stringify({ jsonrpc: "2.0", method, params });
     ws.send(msg);
     console.log(`→ notification: ${method}`);
@@ -60,7 +68,13 @@ async function run(): Promise<void> {
     console.log("Connected.\n");
 
     ws.onmessage = (event) => {
-        let msg: { id?: number; result?: unknown; error?: unknown; method?: string; params?: unknown };
+        let msg: {
+            id?: number;
+            result?: unknown;
+            error?: unknown;
+            method?: string;
+            params?: unknown;
+        };
         try {
             msg = JSON.parse(String(event.data));
         } catch {
@@ -149,9 +163,10 @@ async function run(): Promise<void> {
             };
             const threads = list?.data ?? list?.threads ?? [];
             if (threads.length) {
-                threadId = (threads[0] as { id?: string; threadId?: string }).id
-                    ?? (threads[0] as { threadId?: string }).threadId
-                    ?? null;
+                threadId =
+                    (threads[0] as { id?: string; threadId?: string }).id ??
+                    (threads[0] as { threadId?: string }).threadId ??
+                    null;
                 console.log(`Found thread from list: ${threadId}\n`);
 
                 console.log("Step 3: Resuming thread...");

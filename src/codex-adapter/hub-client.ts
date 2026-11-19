@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { makeLogger } from "../logger";
-import { suffixedName, savePeerId } from "./identity";
+import { savePeerId, suffixedName } from "./identity";
 
 const log = makeLogger("codex-hub");
 
@@ -200,8 +200,7 @@ export class HubClient {
         if (this.closed) return;
         if (
             this.ws &&
-            (this.ws.readyState === WebSocket.OPEN ||
-                this.ws.readyState === WebSocket.CONNECTING)
+            (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
         ) {
             return;
         }
@@ -255,7 +254,11 @@ export class HubClient {
                     if (code === "bad_args" || code === "protocol_mismatch") {
                         clearTimeout(timeout);
                         this.closed = true;
-                        try { ws.close(); } catch { /* ignore */ }
+                        try {
+                            ws.close();
+                        } catch {
+                            /* ignore */
+                        }
                         reject(new Error(code));
                         return;
                     }
@@ -294,7 +297,11 @@ export class HubClient {
                 } else {
                     for (const [, entry] of this.pending) {
                         clearTimeout(entry.timer);
-                        try { entry.reject(new Error("connection lost")); } catch { /* ignore */ }
+                        try {
+                            entry.reject(new Error("connection lost"));
+                        } catch {
+                            /* ignore */
+                        }
                     }
                     this.pending.clear();
                     this.scheduleReconnect();
@@ -340,10 +347,10 @@ export class HubClient {
 
         if (msg.type === "ping") {
             try {
-                this.ws?.send(
-                    JSON.stringify({ type: "pong", req_id: msg.req_id }),
-                );
-            } catch { /* ignore */ }
+                this.ws?.send(JSON.stringify({ type: "pong", req_id: msg.req_id }));
+            } catch {
+                /* ignore */
+            }
             return;
         }
 
@@ -356,14 +363,14 @@ export class HubClient {
 
         if (msg.type === "broadcast_ack" && msg.broadcast_id) {
             const bcastId = String(msg.broadcast_id);
-            if (!this.broadcastReceipts.has(bcastId) && this.broadcastReceipts.size >= MAX_BROADCAST_RECEIPTS) {
+            if (
+                !this.broadcastReceipts.has(bcastId) &&
+                this.broadcastReceipts.size >= MAX_BROADCAST_RECEIPTS
+            ) {
                 const oldest = this.broadcastReceipts.keys().next().value;
                 if (oldest !== undefined) this.broadcastReceipts.delete(oldest);
             }
-            this.broadcastReceipts.set(
-                String(msg.broadcast_id),
-                `ack:${msg.peer_count ?? 0}`,
-            );
+            this.broadcastReceipts.set(String(msg.broadcast_id), `ack:${msg.peer_count ?? 0}`);
         }
 
         const pushTypes = new Set([
@@ -430,7 +437,9 @@ export class HubClient {
         try {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             this.ws.send(JSON.stringify(payload));
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
     }
 
     // ── Reconnect ─────────────────────────────────────────────────
@@ -470,13 +479,21 @@ export class HubClient {
         }
         for (const [, entry] of this.pending) {
             clearTimeout(entry.timer);
-            try { entry.reject(new Error("client closed")); } catch { /* ignore */ }
+            try {
+                entry.reject(new Error("client closed"));
+            } catch {
+                /* ignore */
+            }
         }
         this.pending.clear();
         this.messageSenders.clear();
         this.broadcastReceipts.clear();
         if (this.ws) {
-            try { this.ws.close(); } catch { /* ignore */ }
+            try {
+                this.ws.close();
+            } catch {
+                /* ignore */
+            }
             this.ws = null;
         }
     }

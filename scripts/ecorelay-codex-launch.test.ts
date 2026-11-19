@@ -1,15 +1,15 @@
-import { describe, expect, test, afterEach } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+    buildChildEnv,
+    deletePidFile,
     findFreePort,
     isProcessAlive,
-    validateCodexPath,
-    buildChildEnv,
     readPidFile,
+    validateCodexPath,
     writePidFile,
-    deletePidFile,
 } from "./ecorelay-codex-launch";
 
 // ── findFreePort ──────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
     AppServerClient,
     type AppServerNotification,
@@ -334,9 +334,7 @@ describe("threadResume", () => {
 describe("turnStart", () => {
     test("returns turn result on success", async () => {
         const { client, ws } = createClient();
-        const promise = client.turnStart("t1", [
-            { type: "text", text: "hello" },
-        ]);
+        const promise = client.turnStart("t1", [{ type: "text", text: "hello" }]);
         const sent = ws.lastSent!;
         expect(sent.method).toBe("turn/start");
         expect((sent.params as { threadId: string }).threadId).toBe("t1");
@@ -355,9 +353,7 @@ describe("turnStart", () => {
 
     test("returns null on error (does not throw)", async () => {
         const { client, ws } = createClient();
-        const promise = client.turnStart("t1", [
-            { type: "text", text: "hello" },
-        ]);
+        const promise = client.turnStart("t1", [{ type: "text", text: "hello" }]);
         const id = ws.lastSent!.id as number;
         ws.simulateMessage({
             id,

@@ -1,7 +1,7 @@
 // Verifier edge cases — T4 thread-tracker.ts
 import { describe, expect, test } from "bun:test";
-import { ThreadTracker } from "./thread-tracker";
 import type { AppServerClient, ThreadInfo } from "./app-server-client";
+import { ThreadTracker } from "./thread-tracker";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -20,7 +20,13 @@ function makeMock(data: MockData): AppServerClient {
 }
 
 function makeThread(overrides: Partial<ThreadInfo> & { id: string }): ThreadInfo {
-    return { preview: "some content", status: { type: "idle" }, updatedAt: 1000, createdAt: 1000, ...overrides };
+    return {
+        preview: "some content",
+        status: { type: "idle" },
+        updatedAt: 1000,
+        createdAt: 1000,
+        ...overrides,
+    };
 }
 
 // ── PLAN GAP: poll behavior ───────────────────────────────────────
@@ -64,7 +70,8 @@ describe("Verifier: pollCycle (plan gap)", () => {
                 return { data: ["t2"], nextCursor: null };
             },
             threadRead: async (id: string) => {
-                if (id === "t2") return makeThread({ id: "t2", updatedAt: 500, preview: "new thread" });
+                if (id === "t2")
+                    return makeThread({ id: "t2", updatedAt: 500, preview: "new thread" });
                 return null;
             },
             threadResume: async () => true,
@@ -103,7 +110,8 @@ describe("Verifier: pollCycle (plan gap)", () => {
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["t1", "t2"], nextCursor: null }),
             threadRead: async (id: string) => {
-                if (id === "t1") return makeThread({ id: "t1", updatedAt: 999, preview: "current" });
+                if (id === "t1")
+                    return makeThread({ id: "t1", updatedAt: 999, preview: "current" });
                 if (id === "t2") return makeThread({ id: "t2", updatedAt: 100, preview: "older" });
                 return null;
             },
@@ -152,7 +160,10 @@ describe("Verifier: resume-false for all", () => {
                 ["t1", makeThread({ id: "t1", updatedAt: 200 })],
                 ["t2", makeThread({ id: "t2", updatedAt: 100 })],
             ]),
-            resumeResults: new Map([["t1", false], ["t2", false]]),
+            resumeResults: new Map([
+                ["t1", false],
+                ["t2", false],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: makeMock(data) });
         setTimeout(() => tracker.close(), 50);
@@ -193,7 +204,12 @@ describe("Verifier: huge thread list", () => {
         // If the winning thread is at index 999, it is NEVER read → discover returns null.
         // This test verifies: 1000 threads, winner at index 0 → found correctly, no crash.
         const ids = Array.from({ length: 1000 }, (_, i) => `t${i}`);
-        const threads = new Map(ids.map((id, i) => [id, makeThread({ id, updatedAt: i === 0 ? 9999 : i, preview: "x" })]));
+        const threads = new Map(
+            ids.map((id, i) => [
+                id,
+                makeThread({ id, updatedAt: i === 0 ? 9999 : i, preview: "x" }),
+            ]),
+        );
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ids, nextCursor: null }),
             threadRead: async (id: string) => threads.get(id) ?? null,
@@ -219,9 +235,19 @@ describe("Verifier: updatedAt edge values", () => {
             loaded: ["normal", "future"],
             threads: new Map([
                 ["normal", makeThread({ id: "normal", updatedAt: 1000, preview: "normal" })],
-                ["future", makeThread({ id: "future", updatedAt: Number.MAX_SAFE_INTEGER, preview: "future" })],
+                [
+                    "future",
+                    makeThread({
+                        id: "future",
+                        updatedAt: Number.MAX_SAFE_INTEGER,
+                        preview: "future",
+                    }),
+                ],
             ]),
-            resumeResults: new Map([["normal", true], ["future", true]]),
+            resumeResults: new Map([
+                ["normal", true],
+                ["future", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: makeMock(data) });
         const found = await tracker.discover();
@@ -237,7 +263,10 @@ describe("Verifier: updatedAt edge values", () => {
                 ["no-ts", makeThread({ id: "no-ts", updatedAt: undefined, preview: "a" })],
                 ["has-ts", makeThread({ id: "has-ts", updatedAt: 100, preview: "b" })],
             ]),
-            resumeResults: new Map([["no-ts", true], ["has-ts", true]]),
+            resumeResults: new Map([
+                ["no-ts", true],
+                ["has-ts", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: makeMock(data) });
         const found = await tracker.discover();
@@ -252,7 +281,10 @@ describe("Verifier: updatedAt edge values", () => {
                 ["past", makeThread({ id: "past", updatedAt: -9999, preview: "a" })],
                 ["now", makeThread({ id: "now", updatedAt: 1, preview: "b" })],
             ]),
-            resumeResults: new Map([["past", true], ["now", true]]),
+            resumeResults: new Map([
+                ["past", true],
+                ["now", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: makeMock(data) });
         const found = await tracker.discover();
@@ -357,8 +389,10 @@ describe("Verifier: cwd propagation via onThreadChanged on discover()", () => {
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["t1", "t2"], nextCursor: null }),
             threadRead: async (id: string) => {
-                if (id === "t1") return { ...makeThread({ id: "t1", updatedAt: 100 }), cwd: "/cwd-t1" };
-                if (id === "t2") return { ...makeThread({ id: "t2", updatedAt: 999 }), cwd: "/cwd-t2" };
+                if (id === "t1")
+                    return { ...makeThread({ id: "t1", updatedAt: 100 }), cwd: "/cwd-t1" };
+                if (id === "t2")
+                    return { ...makeThread({ id: "t2", updatedAt: 999 }), cwd: "/cwd-t2" };
                 return null;
             },
             threadResume: async () => true,

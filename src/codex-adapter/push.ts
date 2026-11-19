@@ -1,7 +1,7 @@
-import type { AppServerClient } from "./app-server-client";
-import type { ThreadTracker } from "./thread-tracker";
-import type { HubIncomingMessage } from "./hub-client";
 import { makeLogger } from "../logger";
+import type { AppServerClient } from "./app-server-client";
+import type { HubIncomingMessage } from "./hub-client";
+import type { ThreadTracker } from "./thread-tracker";
 
 const log = makeLogger("codex-push");
 
@@ -92,9 +92,13 @@ export class PushRouter {
         this.appServer = opts.appServer;
         this.threadTracker = opts.threadTracker;
         this.batchDelayMs =
-            Number(process.env.ECORELAY_CODEX_BATCH_DELAY_MS) || opts.batchDelayMs || DEFAULT_BATCH_DELAY_MS;
+            Number(process.env.ECORELAY_CODEX_BATCH_DELAY_MS) ||
+            opts.batchDelayMs ||
+            DEFAULT_BATCH_DELAY_MS;
         this.maxTurnsPerMin =
-            Number(process.env.ECORELAY_CODEX_MAX_TURNS_PER_MIN) || opts.maxTurnsPerMin || DEFAULT_MAX_TURNS_PER_MIN;
+            Number(process.env.ECORELAY_CODEX_MAX_TURNS_PER_MIN) ||
+            opts.maxTurnsPerMin ||
+            DEFAULT_MAX_TURNS_PER_MIN;
     }
 
     // ── Incoming from Hub ─────────────────────────────────────────
@@ -180,9 +184,7 @@ export class PushRouter {
 
         const turnTs = this.recordTurn();
 
-        const result = await this.appServer.turnStart(threadId, [
-            { type: "text", text: wrapped },
-        ]);
+        const result = await this.appServer.turnStart(threadId, [{ type: "text", text: wrapped }]);
 
         if (result) {
             log.info("push_sent", {
