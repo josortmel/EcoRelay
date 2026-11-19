@@ -7,7 +7,10 @@ export default tseslint.config(
     {
         languageOptions: {
             parserOptions: {
-                projectService: true,
+                projectService: {
+                    // Plain-JS Copilot extension: not in tsconfig, linted with a default project.
+                    allowDefaultProject: ["src/copilot-extension/*.mjs"],
+                },
                 tsconfigRootDir: import.meta.dirname,
             },
         },
@@ -27,6 +30,20 @@ export default tseslint.config(
         files: ["**/*.test.ts", "**/test-helpers.ts"],
         rules: {
             "@typescript-eslint/no-non-null-assertion": "off",
+        },
+    },
+    {
+        // The Copilot extension is plain JS that runs in Node: declare the Node globals it
+        // uses (TypeScript does this for the .ts files).
+        files: ["src/copilot-extension/*.mjs"],
+        languageOptions: {
+            globals: {
+                process: "readonly",
+                setTimeout: "readonly",
+                clearTimeout: "readonly",
+                WebSocket: "readonly",
+                crypto: "readonly",
+            },
         },
     },
     {

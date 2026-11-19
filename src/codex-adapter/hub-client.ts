@@ -333,8 +333,8 @@ export class HubClient {
         const msg = parsed as Record<string, unknown>;
 
         const reqId = msg.req_id as string | undefined;
-        if (reqId && this.pending.has(reqId)) {
-            const p = this.pending.get(reqId)!;
+        const p = reqId ? this.pending.get(reqId) : undefined;
+        if (reqId && p) {
             clearTimeout(p.timer);
             this.pending.delete(reqId);
             if (msg.type === "err") {

@@ -12,13 +12,6 @@ const LOCK_PATH = path.join(os.homedir(), ".eco-relay", "hub.lock");
 const DAEMON_ENTRY = path.resolve(import.meta.dir, "..", "hub-daemon.ts");
 
 // VS2: resolve bun to absolute path at module load
-function resolveBunPath(): string {
-    // On Windows, process.execPath is the bun.exe path
-    if (process.execPath) return process.execPath;
-    return "bun";
-}
-const BUN_PATH = resolveBunPath();
-
 type LockData = {
     pid: number;
     port: number;
@@ -199,7 +192,13 @@ export type HubHandle = {
 };
 
 export function spawnHub(socketPath: string, wsPort: number): HubHandle {
-    const env = { ...process.env, RELAY_HUB_SOCKET: socketPath };
+    // The daemon reads its WS port from ECORELAY_WS_PORT: pass the one we were asked
+    // for, which is also the one bootstrapHub writes to the lock and returns.
+    const env = {
+        ...process.env,
+        RELAY_HUB_SOCKET: socketPath,
+        ECORELAY_WS_PORT: String(wsPort),
+    };
 
     const child = spawn("bun", ["run", DAEMON_ENTRY], {
         env,
