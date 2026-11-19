@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
 import { PROTOCOL_VERSION } from "../protocol";
 import { startHub } from "./index";
@@ -142,5 +142,24 @@ describe("hub lifecycle", () => {
         // Wait past idleExitMs; onIdleExit fires exactly once, no crash.
         await new Promise((r) => setTimeout(r, 400));
         expect(idleExitCount).toBe(1);
+    });
+});
+
+describe("hub as a library", () => {
+    // startHub used to call process.exit(0) on idle unless told otherwise, and its idle
+    // timer starts as soon as the hub is up. A hub running inside another process (the
+    // test runner, any embedding app) killed that process with exit code 0 after 10 s:
+    // in CI the test run was cut short and still reported green. Only the daemon exits,
+    // and it asks for it explicitly.
+    test("an idle hub does not exit the host process unless asked to", async () => {
+        const exitSpy = spyOn(process, "exit").mockImplementation((() => undefined) as never);
+        const hub = await startHub({ socketPath: tmpSocket(), idleExitMs: 50 });
+        try {
+            await new Promise((r) => setTimeout(r, 200));
+            expect(exitSpy).not.toHaveBeenCalled();
+        } finally {
+            await hub.close();
+            exitSpy.mockRestore();
+        }
     });
 });

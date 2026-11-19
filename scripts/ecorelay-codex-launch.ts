@@ -53,6 +53,9 @@ export function findFreePort(min: number, max: number): Promise<number> {
 // ── PID file ──────────────────────────────────────────────────────
 
 export function isProcessAlive(pid: number): boolean {
+    // On Linux, kill(-1, 0) and kill(0, 0) address "every process I may signal" and
+    // "my process group": they succeed, so a bad PID file would read as a live server.
+    if (!Number.isInteger(pid) || pid <= 0) return false;
     try {
         process.kill(pid, 0);
         return true;

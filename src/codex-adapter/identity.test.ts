@@ -175,9 +175,8 @@ describe("suffixedName", () => {
 // ── Peer ID cache ─────────────────────────────────────────────────
 
 describe("peer ID cache", () => {
-    const tmpDir = path.join(os.tmpdir(), `ecorelay-cache-test-${Date.now()}`);
-    const origCache = process.env.HOME;
-
+    // The cache lives under the home directory, which src/test-preload.ts points to a
+    // throwaway folder for every test run: these tests never touch the real cache.
     test("loadPeerId returns null for unknown cwd", () => {
         expect(loadPeerId("/nonexistent")).toBeNull();
     });

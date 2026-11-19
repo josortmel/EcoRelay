@@ -1,0 +1,3 @@
+[test]
+# Every test run gets a throwaway home and no live relay settings: see src/test-preload.ts.
+preload = ["./src/test-preload.ts"]
