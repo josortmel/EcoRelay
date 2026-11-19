@@ -50,6 +50,34 @@ export function findFreePort(min: number, max: number): Promise<number> {
     });
 }
 
+/**
+ * A port for the Codex app-server: the preferred range first, then any free port the
+ * OS hands out. On Windows, Hyper-V / WinNAT reserve port ranges that move between
+ * reboots (on 2026-11-19 one covered 4569-4668), and a fixed range alone left the
+ * launcher with no port at all. The port is written to the PID file, so any port works.
+ */
+export async function pickAppServerPort(min = PORT_MIN, max = PORT_MAX): Promise<number> {
+    try {
+        return await findFreePort(min, max);
+    } catch {
+        const port = await osAssignedPort();
+        console.log(`No free port in ${min}-${max} (reserved by the OS?); using ${port}.`);
+        return port;
+    }
+}
+
+function osAssignedPort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const srv = net.createServer();
+        srv.once("error", reject);
+        srv.listen(0, "127.0.0.1", () => {
+            const addr = srv.address();
+            const port = typeof addr === "object" && addr ? addr.port : 0;
+            srv.close(() => (port > 0 ? resolve(port) : reject(new Error("no port from the OS"))));
+        });
+    });
+}
+
 // ── PID file ──────────────────────────────────────────────────────
 
 export function isProcessAlive(pid: number): boolean {
@@ -208,12 +236,12 @@ async function main(): Promise<void> {
                 `PID ${existing.pid} alive but not responding as app-server. Spawning fresh.`,
             );
             deletePidFile();
-            port = await findFreePort(PORT_MIN, PORT_MAX);
+            port = await pickAppServerPort();
             weOwnAppServer = true;
         }
     } else {
         if (existing) deletePidFile();
-        port = await findFreePort(PORT_MIN, PORT_MAX);
+        port = await pickAppServerPort();
         weOwnAppServer = true;
     }
 

@@ -7,6 +7,7 @@ import {
     deletePidFile,
     findFreePort,
     isProcessAlive,
+    pickAppServerPort,
     readPidFile,
     validateCodexPath,
     writePidFile,
@@ -14,22 +15,58 @@ import {
 
 // ── findFreePort ──────────────────────────────────────────────────
 
+// The real 4580-4599 range is not used here: Windows may reserve it (it did on
+// 2026-11-19), and then the result depends on the machine, not on the code.
+async function osFreePort(): Promise<number> {
+    const net = await import("node:net");
+    return new Promise((resolve) => {
+        const srv = net.createServer();
+        srv.listen(0, "127.0.0.1", () => {
+            const addr = srv.address();
+            const port = typeof addr === "object" && addr ? addr.port : 0;
+            srv.close(() => resolve(port));
+        });
+    });
+}
+
+async function canListen(port: number): Promise<boolean> {
+    const net = await import("node:net");
+    return new Promise((resolve) => {
+        const srv = net.createServer();
+        srv.once("error", () => resolve(false));
+        srv.listen(port, "127.0.0.1", () => srv.close(() => resolve(true)));
+    });
+}
+
 describe("findFreePort", () => {
-    test("finds a port in range", async () => {
-        const port = await findFreePort(4580, 4599);
-        expect(port).toBeGreaterThanOrEqual(4580);
-        expect(port).toBeLessThanOrEqual(4599);
+    test("finds the free port in a range", async () => {
+        const free = await osFreePort();
+        expect(await findFreePort(free, free)).toBe(free);
     });
 
     test("returned port is actually free", async () => {
-        const port = await findFreePort(4580, 4599);
+        const free = await osFreePort();
+        expect(await canListen(await findFreePort(free, free))).toBe(true);
+    });
+});
+
+describe("pickAppServerPort", () => {
+    test("falls back to a free port from the OS when the whole range is taken", async () => {
         const net = await import("node:net");
-        const srv = net.createServer();
-        await new Promise<void>((resolve, reject) => {
-            srv.once("error", reject);
-            srv.once("listening", () => srv.close(() => resolve()));
-            srv.listen(port, "127.0.0.1");
+        const taken = net.createServer();
+        const port = await new Promise<number>((resolve) => {
+            taken.listen(0, "127.0.0.1", () => {
+                const addr = taken.address();
+                resolve(typeof addr === "object" && addr ? addr.port : 0);
+            });
         });
+        try {
+            const picked = await pickAppServerPort(port, port);
+            expect(picked).not.toBe(port);
+            expect(await canListen(picked)).toBe(true);
+        } finally {
+            await new Promise<void>((r) => taken.close(() => r()));
+        }
     });
 });
 
