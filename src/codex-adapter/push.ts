@@ -256,7 +256,8 @@ export class PushRouter {
     private checkRateLimit(): boolean {
         const now = Date.now();
         const windowStart = now - 60_000;
-        while (this.turnTimestamps.length > 0 && this.turnTimestamps[0]! < windowStart) {
+        // An empty list reads as Infinity, which is never older than the window.
+        while ((this.turnTimestamps[0] ?? Infinity) < windowStart) {
             this.turnTimestamps.shift();
         }
         return this.turnTimestamps.length < this.maxTurnsPerMin;
@@ -275,8 +276,8 @@ export class PushRouter {
 
     private scheduleRateLimitRetry(): void {
         if (this.rateLimitRetryTimer || this.closed) return;
-        if (this.turnTimestamps.length === 0) return;
-        const oldest = this.turnTimestamps[0]!;
+        const oldest = this.turnTimestamps[0];
+        if (oldest === undefined) return;
         const retryIn = Math.max(oldest + 60_000 - Date.now() + 100, 500);
         this.rateLimitRetryTimer = setTimeout(() => {
             this.rateLimitRetryTimer = null;

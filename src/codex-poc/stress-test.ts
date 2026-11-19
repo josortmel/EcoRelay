@@ -59,10 +59,11 @@ function connect(label: string): Promise<WebSocket> {
             } catch {
                 return;
             }
-            if (typeof msg.id === "number" && pending.has(msg.id)) {
-                const p = pending.get(msg.id)!;
+            const id = typeof msg.id === "number" ? msg.id : undefined;
+            const p = id !== undefined ? pending.get(id) : undefined;
+            if (id !== undefined && p) {
                 clearTimeout(p.timer);
-                pending.delete(msg.id);
+                pending.delete(id);
                 if (msg.error) p.reject(msg.error);
                 else p.resolve(msg.result);
             } else if (msg.method) {
@@ -146,6 +147,8 @@ async function test2_threadStability(ws: WebSocket): Promise<void> {
     console.log("TEST 2 RESULT: OK si los IDs son consistentes entre intentos.");
 }
 
+// Disabled on purpose (its call in main() is commented out); kept with the rest of the PoC as reference.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function test3_consecutivePush(ws: WebSocket, threadId: string): Promise<void> {
     console.log("\n=== TEST 3: 3 turn/start consecutivos rápidos ===");
 

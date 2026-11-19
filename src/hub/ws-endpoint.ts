@@ -1,3 +1,4 @@
+import type { Server, ServerWebSocket } from "bun";
 import * as crypto from "node:crypto";
 import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
@@ -17,8 +18,20 @@ export interface SocketLike {
     write(data: string): boolean;
     end(): void;
     destroy(): void;
-    on(event: string, listener: (...args: any[]) => void): this;
-    emit(event: string, ...args: any[]): boolean;
+    on(event: string, listener: (...args: unknown[]) => void): this;
+    emit(event: string, ...args: unknown[]): boolean;
+}
+
+/** The part of a WebSocket that VirtualSocket uses: Bun's ServerWebSocket, or a test fake. */
+export interface WsLike {
+    send(data: string): unknown;
+    close(code?: number, reason?: string): void;
+}
+
+/** Per-connection state, kept in Bun's `ws.data` instead of ad-hoc properties on the socket. */
+interface WsData {
+    vs?: VirtualSocket;
+    authTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class VirtualSocket extends EventEmitter implements SocketLike {
@@ -26,9 +39,9 @@ export class VirtualSocket extends EventEmitter implements SocketLike {
     destroyed = false;
     remoteAddress = "127.0.0.1";
 
-    private ws: any;
+    private ws: WsLike;
 
-    constructor(ws: any) {
+    constructor(ws: WsLike) {
         super();
         this.ws = ws;
     }
@@ -102,14 +115,14 @@ export function addWsEndpoint(
     const token = loadOrCreateToken();
     const tokenBuf = Buffer.from(token);
 
-    const wsServer = Bun.serve({
+    const wsServer = Bun.serve<WsData>({
         port: opts.port,
         hostname: "127.0.0.1",
         websocket: {
             maxPayloadLength: 1_048_576, // 1 MiB
-            open(ws: any): void {
+            open(ws: ServerWebSocket<WsData>): void {
                 const vs = new VirtualSocket(ws);
-                (ws as any)._vs = vs;
+                ws.data.vs = vs;
 
                 const authTimer = setTimeout(() => {
                     log.warn("ws_auth_timeout");
@@ -119,17 +132,14 @@ export function addWsEndpoint(
                         // ignore
                     }
                 }, 5000);
-                (ws as any)._authTimer = authTimer;
+                ws.data.authTimer = authTimer;
             },
-            message(ws: any, data: any): void {
-                const vs = (ws as any)._vs as VirtualSocket | undefined;
+            message(ws: ServerWebSocket<WsData>, data: string | Buffer): void {
+                const vs = ws.data.vs;
                 if (!vs || vs.destroyed) return;
 
                 const raw = typeof data === "string" ? data : data.toString();
-                const authTimer = (ws as any)._authTimer as
-                    | ReturnType<typeof setTimeout>
-                    | null
-                    | undefined;
+                const authTimer = ws.data.authTimer;
 
                 if (authTimer) {
                     // F1-VS4: auth payload size validation
@@ -142,7 +152,7 @@ export function addWsEndpoint(
                         }
                         return;
                     }
-                    let parsed: any;
+                    let parsed: unknown;
                     try {
                         parsed = JSON.parse(raw);
                     } catch {
@@ -154,7 +164,12 @@ export function addWsEndpoint(
                         }
                         return;
                     }
-                    if (typeof parsed.auth !== "string") {
+                    // Valid JSON is not necessarily an object: `null`, `3` or `"x"` have no .auth.
+                    const auth =
+                        typeof parsed === "object" && parsed !== null
+                            ? (parsed as { auth?: unknown }).auth
+                            : undefined;
+                    if (typeof auth !== "string") {
                         log.warn("ws_auth_missing_field");
                         try {
                             ws.close(4003, "auth_failed");
@@ -163,7 +178,7 @@ export function addWsEndpoint(
                         }
                         return;
                     }
-                    const receivedBuf = Buffer.from(parsed.auth);
+                    const receivedBuf = Buffer.from(auth);
                     if (
                         receivedBuf.length !== tokenBuf.length ||
                         !crypto.timingSafeEqual(receivedBuf, tokenBuf)
@@ -177,7 +192,7 @@ export function addWsEndpoint(
                         return;
                     }
                     clearTimeout(authTimer);
-                    delete (ws as any)._authTimer;
+                    ws.data.authTimer = undefined;
                     log.info("ws_auth_ok");
                     return;
                 }
@@ -199,12 +214,8 @@ export function addWsEndpoint(
                     handleLine(line, vs, send);
                 }
             },
-            close(ws: any): void {
-                const vs = (ws as any)._vs as VirtualSocket | undefined;
-                const authTimer = (ws as any)._authTimer as
-                    | ReturnType<typeof setTimeout>
-                    | null
-                    | undefined;
+            close(ws: ServerWebSocket<WsData>): void {
+                const { vs, authTimer } = ws.data;
                 if (authTimer) clearTimeout(authTimer);
 
                 if (vs) {
@@ -216,8 +227,8 @@ export function addWsEndpoint(
                 }
             },
         },
-        fetch(req: Request, server: any): Response | undefined {
-            if (server.upgrade(req)) return;
+        fetch(req: Request, server: Server<WsData>): Response | undefined {
+            if (server.upgrade(req, { data: {} })) return;
             return new Response("EcoRelay WS endpoint", { status: 426 });
         },
     });

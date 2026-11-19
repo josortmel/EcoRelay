@@ -151,6 +151,26 @@ describe("WS endpoint auth", () => {
         expect(result.reason).toContain("auth_failed");
     });
 
+    test("valid JSON that is not an object (null) → auth_failed, not a crash", async () => {
+        // `null.auth` used to throw inside the handler: the connection only closed when
+        // the 5 s auth timer fired, with "auth_timeout" instead of "auth_failed".
+        const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
+        const closePromise = new Promise<{ code: number; reason: string }>((res) => {
+            ws.onclose = (ev: CloseEvent) => {
+                res({ code: ev.code, reason: ev.reason });
+            };
+        });
+        await new Promise<void>((resolve) => {
+            ws.onopen = () => resolve();
+        });
+
+        ws.send("null");
+
+        const result = await closePromise;
+        expect(result.code).toBe(4003);
+        expect(result.reason).toContain("auth_failed");
+    }, 10_000);
+
     test("5 second no-auth → server closes with code 4003", async () => {
         const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
         const closePromise = new Promise<{ code: number; reason: string }>((res) => {

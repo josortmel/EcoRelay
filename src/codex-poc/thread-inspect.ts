@@ -50,10 +50,11 @@ async function run(): Promise<void> {
         } catch {
             return;
         }
-        if (typeof msg.id === "number" && pending.has(msg.id)) {
-            const p = pending.get(msg.id)!;
+        const id = typeof msg.id === "number" ? msg.id : undefined;
+        const p = id !== undefined ? pending.get(id) : undefined;
+        if (id !== undefined && p) {
             clearTimeout(p.timer);
-            pending.delete(msg.id);
+            pending.delete(id);
             if (msg.error) p.reject(msg.error);
             else p.resolve(msg.result);
         }

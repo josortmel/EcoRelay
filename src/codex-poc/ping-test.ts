@@ -86,10 +86,11 @@ async function run(): Promise<void> {
         }
 
         // Response to our request
-        if (msg.id !== undefined && pending.has(msg.id)) {
-            const p = pending.get(msg.id)!;
+        const id = msg.id;
+        const p = id !== undefined ? pending.get(id) : undefined;
+        if (id !== undefined && p) {
             clearTimeout(p.timer);
-            pending.delete(msg.id);
+            pending.delete(id);
             if (msg.error) {
                 console.log(`← error (id=${msg.id}):`, JSON.stringify(msg.error));
                 p.reject(msg.error);
@@ -121,7 +122,7 @@ async function run(): Promise<void> {
 
     // Step 1: Initialize
     console.log("Step 1: Initialize handshake...");
-    const initResult = await sendRequest(ws, "initialize", {
+    await sendRequest(ws, "initialize", {
         clientInfo: {
             name: "ecorelay-codex-poc",
             title: "EcoRelay Codex POC",
@@ -146,8 +147,9 @@ async function run(): Promise<void> {
             threadIds?: string[];
         };
         const loadedIds = loaded?.data ?? loaded?.threadIds ?? [];
-        if (loadedIds.length) {
-            threadId = loadedIds[0]!;
+        const firstLoaded = loadedIds[0];
+        if (firstLoaded !== undefined) {
+            threadId = firstLoaded;
             console.log(`Found loaded thread: ${threadId}\n`);
 
             // Resume/subscribe to the thread
