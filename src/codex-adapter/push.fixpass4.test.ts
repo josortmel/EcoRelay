@@ -86,7 +86,6 @@ describe("NEW-BC1: rate-limit retry timer fires when window expires", () => {
 
 describe("NEW-BC2: failed turnStart un-records only its own timestamp", () => {
     test("first batch fails → removes ts1 only, ts2 (second batch) preserved", async () => {
-        let callCount = 0;
         const { appServer, turnCalls } = createAppServer((n) => {
             return n === 1 ? null : { id: "t-ok", status: "ok" }; // first fails, second succeeds
         });
@@ -191,7 +190,6 @@ describe("VS24: concurrent urgent burst during active thread respects maxTurnsPe
     test("non-urgent messages during active thread still await idle before rate check", async () => {
         // VS24: rate limit check now comes AFTER idle wait (moved position in sendBatch)
         // Non-urgent + active: waitForIdle() runs, then checkRateLimit()
-        let idleResolver: (() => void) | null = null;
         let currentStatus: "active" | "idle" = "active";
 
         const tracker = {

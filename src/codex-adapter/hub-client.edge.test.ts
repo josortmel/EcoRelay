@@ -69,12 +69,13 @@ class HandshakeMockWS {
     }
 }
 
-let capturedWs: HandshakeMockWS | null = null;
 const OriginalWebSocket = globalThis.WebSocket;
 
 function installMockWs(): HandshakeMockWS {
     const ws = new HandshakeMockWS();
-    capturedWs = ws;
+    // A class is needed here: the code under test calls `new WebSocket(...)`, and the
+    // constructor returns the mock. Only static fields besides that, hence the exception.
+    // eslint-disable-next-line @typescript-eslint/no-extraneous-class
     (globalThis as unknown as Record<string, unknown>).WebSocket = class {
         static readonly OPEN = HandshakeMockWS.OPEN;
         static readonly CONNECTING = HandshakeMockWS.CONNECTING;
@@ -88,12 +89,9 @@ function installMockWs(): HandshakeMockWS {
 
 function restoreWs(): void {
     (globalThis as unknown as Record<string, unknown>).WebSocket = OriginalWebSocket;
-    capturedWs = null;
 }
 
 // Make auth token available for handshake tests
-const TOKEN_DIR = path.join(os.homedir(), ".eco-relay");
-const TOKEN_FILE = path.join(TOKEN_DIR, "hub-ws-token");
 const ORIG_TOKEN_ENV = process.env.ECORELAY_WS_TOKEN;
 
 function setTestToken(token: string): void {

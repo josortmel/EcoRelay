@@ -2,7 +2,28 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 
-let _server: any;
+// The plugin module is imported in beforeAll (it reads ECORELAY_DAEMON_PATH at load
+// time), so its types are taken from the module type rather than a static import.
+type ServerFn = (typeof import("./ecorelay"))["server"];
+type ServerInput = Parameters<ServerFn>[0];
+type PluginHooks = Awaited<ReturnType<ServerFn>>;
+type PluginEvent = Parameters<NonNullable<PluginHooks["event"]>>[0]["event"];
+type TransformInput = Parameters<NonNullable<PluginHooks["experimental.chat.system.transform"]>>[0];
+
+/** A partial PluginInput: the plugin only uses the fields the mock provides. */
+function asInput(input: unknown): ServerInput {
+    return input as ServerInput;
+}
+
+/**
+ * A partial OpenCode event: the plugin only reads `type` and `properties.info`.
+ * Some tests pass malformed ones on purpose, to check the plugin survives them.
+ */
+function partialEvent(event: unknown): PluginEvent {
+    return event as PluginEvent;
+}
+
+let _server: ServerFn;
 const _prevDaemonPath = process.env.ECORELAY_DAEMON_PATH;
 
 beforeAll(async () => {
@@ -35,11 +56,11 @@ function mockPluginInput(overrides: Record<string, unknown> = {}) {
                 prompt: mock(async () => {}),
             },
         },
-        project: { id: "test", name: "test" } as any,
+        project: { id: "test", name: "test" },
         directory: "/fake/dir",
         worktree: "/fake/dir",
         serverUrl: new URL("http://127.0.0.1:4096"),
-        $: {} as any,
+        $: {},
         ...overrides,
     };
 }
@@ -58,7 +79,7 @@ describe("Server lifecycle", () => {
         const input = mockPluginInput({
             client: { session: { list: listSpy, prompt: mock(async () => {}) } },
         });
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
         expect(listSpy).toHaveBeenCalled();
         expect(typeof hooks.dispose).toBe("function");
         expect(typeof hooks.event).toBe("function");
@@ -77,7 +98,7 @@ describe("Server lifecycle", () => {
                 },
             },
         });
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
         expect(hooks.tool).toBeDefined();
     });
 
@@ -89,7 +110,7 @@ describe("Server lifecycle", () => {
         const input = mockPluginInput({
             client: { session: { list: mockSessionList(sessions), prompt: mock(async () => {}) } },
         });
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
         // Child sessions with parentID are skipped in bootstrap
         // Root session s1 is passed to ensurePeer
         expect(hooks.tool).toBeDefined();
@@ -97,7 +118,7 @@ describe("Server lifecycle", () => {
 
     test("dispose runs without error", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
         await hooks.dispose!();
         expect(true).toBe(true);
     });
@@ -106,7 +127,7 @@ describe("Server lifecycle", () => {
 describe("Tool registration", () => {
     test("all 19 MCP tools are registered", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         const toolNames = [
             "relay_send",
@@ -140,99 +161,104 @@ describe("Tool registration", () => {
 describe("Event handler", () => {
     test("session.created with valid session via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         // SDK v1.15.12: properties.info, not .session
         await expect(
             hooks.event!({
-                event: {
+                event: partialEvent({
                     type: "session.created",
                     properties: { info: { id: "s-new", title: "New Session" } },
-                } as any,
+                }),
             }),
         ).resolves.toBeUndefined();
     });
 
     test("session.created with invalid properties does not crash", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         // Invalid: empty properties (no .info)
         await expect(
-            hooks.event!({ event: { type: "session.created", properties: {} } } as any),
+            hooks.event!({ event: partialEvent({ type: "session.created", properties: {} }) }),
         ).resolves.toBeUndefined();
         // Invalid: .info without id
         await expect(
             hooks.event!({
-                event: { type: "session.created", properties: { info: {} as any } },
-            } as any),
+                event: partialEvent({ type: "session.created", properties: { info: {} } }),
+            }),
         ).resolves.toBeUndefined();
         // Invalid: null .info
         await expect(
-            hooks.event!({ event: { type: "session.created", properties: { info: null } } } as any),
+            hooks.event!({
+                event: partialEvent({ type: "session.created", properties: { info: null } }),
+            }),
         ).resolves.toBeUndefined();
     });
 
     test("session.created with child session (parentID) is skipped", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         // SDK v1.15.12: parentID (capital D) — child session must NOT create a peer
         await expect(
             hooks.event!({
-                event: {
+                event: partialEvent({
                     type: "session.created",
                     properties: { info: { id: "child-1", title: "Child", parentID: "root-1" } },
-                } as any,
+                }),
             }),
         ).resolves.toBeUndefined();
     });
 
     test("session.deleted with valid info.id removes peer", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         // Create peer first
         await hooks.event!({
-            event: {
+            event: partialEvent({
                 type: "session.created",
                 properties: { info: { id: "s-del", title: "To Delete" } },
-            } as any,
+            }),
         });
         // Delete via .info.id (SDK v1.15.12 — not .sessionID)
         await expect(
             hooks.event!({
-                event: { type: "session.deleted", properties: { info: { id: "s-del" } } } as any,
+                event: partialEvent({
+                    type: "session.deleted",
+                    properties: { info: { id: "s-del" } },
+                }),
             }),
         ).resolves.toBeUndefined();
     });
 
     test("session.deleted with invalid properties warns but does not crash", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         // Invalid: no .info
         await expect(
-            hooks.event!({ event: { type: "session.deleted", properties: {} } } as any),
+            hooks.event!({ event: partialEvent({ type: "session.deleted", properties: {} }) }),
         ).resolves.toBeUndefined();
         // Invalid: .info without id
         await expect(
             hooks.event!({
-                event: { type: "session.deleted", properties: { info: {} as any } },
-            } as any),
+                event: partialEvent({ type: "session.deleted", properties: { info: {} } }),
+            }),
         ).resolves.toBeUndefined();
     });
 
     test("concurrent session.created events with .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         for (let i = 0; i < 20; i++) {
             await hooks.event!({
-                event: {
+                event: partialEvent({
                     type: "session.created",
                     properties: { info: { id: `concurrent-${i}`, title: `S${i}` } },
-                } as any,
+                }),
             });
         }
         // All 20 sessions processed via .info API — no crash
@@ -241,23 +267,23 @@ describe("Event handler", () => {
 
     test("rapid create+delete+create same id via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         const sid = "churn-session";
         await hooks.event!({
-            event: {
+            event: partialEvent({
                 type: "session.created",
                 properties: { info: { id: sid, title: "Churn" } },
-            } as any,
+            }),
         });
         await hooks.event!({
-            event: { type: "session.deleted", properties: { info: { id: sid } } } as any,
+            event: partialEvent({ type: "session.deleted", properties: { info: { id: sid } } }),
         });
         await hooks.event!({
-            event: {
+            event: partialEvent({
                 type: "session.created",
                 properties: { info: { id: sid, title: "Again" } },
-            } as any,
+            }),
         });
         // Full cycle via .info API — no crash
         expect(true).toBe(true);
@@ -267,30 +293,30 @@ describe("Event handler", () => {
 describe("System transform", () => {
     test("injects INSTRUCTIONS when not present", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         const output = { system: [] as string[] };
-        await hooks["experimental.chat.system.transform"]!({} as any, output);
+        await hooks["experimental.chat.system.transform"]!({} as TransformInput, output);
         expect(output.system.length).toBe(1);
         expect(output.system[0]).toInclude("[ECORELAY_INSTRUCTIONS_v0.7.6]");
     });
 
     test("does not inject INSTRUCTIONS twice", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         const output = { system: [] as string[] };
-        await hooks["experimental.chat.system.transform"]!({} as any, output);
-        await hooks["experimental.chat.system.transform"]!({} as any, output);
+        await hooks["experimental.chat.system.transform"]!({} as TransformInput, output);
+        await hooks["experimental.chat.system.transform"]!({} as TransformInput, output);
         expect(output.system.length).toBe(1);
     });
 
     test("skips injection if marker already present", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         const output = { system: ["[ECORELAY_INSTRUCTIONS_v0.7.6] existing content"] };
-        await hooks["experimental.chat.system.transform"]!({} as any, output);
+        await hooks["experimental.chat.system.transform"]!({} as TransformInput, output);
         expect(output.system.length).toBe(1);
     });
 });
@@ -298,34 +324,34 @@ describe("System transform", () => {
 describe("Edge cases", () => {
     test("server handles empty session list", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
         expect(hooks.tool).toBeDefined();
     });
 
     test("server handles unicode session titles via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         await expect(
             hooks.event!({
-                event: {
+                event: partialEvent({
                     type: "session.created",
                     properties: { info: { id: "unicode-1", title: "セッション 🎉 中文" } },
-                } as any,
+                }),
             }),
         ).resolves.toBeUndefined();
     });
 
     test("server handles session with null title via .info API", async () => {
         const input = mockPluginInput();
-        const hooks = await _server(input as any);
+        const hooks = await _server(asInput(input));
 
         await expect(
             hooks.event!({
-                event: {
+                event: partialEvent({
                     type: "session.created",
                     properties: { info: { id: "no-title", title: null } },
-                } as any,
+                }),
             }),
         ).resolves.toBeUndefined();
     });

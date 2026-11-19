@@ -33,11 +33,9 @@ function makeThread(overrides: Partial<ThreadInfo> & { id: string }): ThreadInfo
 
 describe("Verifier: pollCycle (plan gap)", () => {
     test("AT1: poll switches to newer thread (updatedAt higher)", async () => {
-        let readCalls = 0;
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["t1", "t2"], nextCursor: null }),
             threadRead: async (id: string) => {
-                readCalls++;
                 if (id === "t1") return makeThread({ id: "t1", updatedAt: 100, preview: "old" });
                 if (id === "t2") return makeThread({ id: "t2", updatedAt: 999, preview: "newer" });
                 return null;
