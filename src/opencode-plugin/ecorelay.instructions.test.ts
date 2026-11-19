@@ -195,7 +195,10 @@ describe("chat.system.transform hook", () => {
             // registerHook intentionally absent
         };
         try {
-            (mockClient as any).registerHook?.("experimental.chat.system.transform", hookTransform);
+            (mockClient as { registerHook?: (name: string, fn: unknown) => void }).registerHook?.(
+                "experimental.chat.system.transform",
+                hookTransform,
+            );
         } catch {
             crashed = true;
         }

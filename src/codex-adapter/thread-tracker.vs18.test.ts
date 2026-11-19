@@ -86,11 +86,9 @@ describe("VS18: future-date guard — now+5_000 threshold (was now+60_000)", () 
     test("poll cycle also uses now+5_000 guard (regression: pollCycle line 173)", async () => {
         // VS18 also applies in pollCycle (line 173). Verify pollCycle rejects now+6000 thread.
         const farFuture = Date.now() + 6_000;
-        let readCount = 0;
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["t1", "far-future"], nextCursor: null }),
             threadRead: async (id: string) => {
-                readCount++;
                 if (id === "t1")
                     return makeThread({ id: "t1", updatedAt: 100, preview: "current" });
                 if (id === "far-future")

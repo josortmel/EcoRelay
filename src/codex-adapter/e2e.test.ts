@@ -274,7 +274,6 @@ describe("E2E 4: reconnect behavior", () => {
     });
 
     test("app-server-client: pending flushed on close (simulated drop)", async () => {
-        const { client: appServer } = createMockAppServer();
         const realClient = new AppServerClient({ url: "ws://127.0.0.1:9999" });
         const mockWs = new MockWS();
         realClient._setWsForTest(mockWs as unknown as WebSocket);

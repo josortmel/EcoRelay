@@ -235,6 +235,8 @@ describe("relay_rename", () => {
         const { hub, sendCalls } = createMockHub({ type: "ack" });
         const result = await callTool(hub, "relay_rename", { new_name: "new-name" });
         expect(result.isError).toBeUndefined();
+        // The rename must be asked of the hub, not only applied locally.
+        expect(sendCalls).toEqual([{ type: "rename", new_name: "new-name" }]);
         expect(hub.name).toBe("new-name");
     });
 });

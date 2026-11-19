@@ -113,7 +113,7 @@ describe("Verifier: unknown id handling", () => {
     });
 
     test("AT5: stray response with string id ignored (not in pending map)", () => {
-        const { client, ws } = makeClient();
+        const { ws } = makeClient();
         // id as string — map uses number keys, so won't match
         expect(() => ws.simulateMessage({ id: "abc", result: "x" })).not.toThrow();
     });

@@ -1,23 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import { startHub } from "./index";
 import { tmpSocket } from "./test-helpers";
 
 function getTestPort(): number {
     // Use a random port in ephemeral range
     return Math.floor(Math.random() * 10000) + 50000;
-}
-
-function getTestToken(): string {
-    const tokenPath = path.join(os.homedir(), ".eco-relay", "hub-ws-token");
-    try {
-        return fs.readFileSync(tokenPath, "utf8").trim();
-    } catch {
-        return crypto.randomBytes(32).toString("hex");
-    }
 }
 
 describe("WS endpoint auth", () => {
@@ -44,7 +32,7 @@ describe("WS endpoint auth", () => {
         ws: WebSocket;
         closed: Promise<{ code: number; reason: string }>;
     }> {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
             const closed = new Promise<{ code: number; reason: string }>((res) => {
                 ws.onclose = (ev: CloseEvent) => {
@@ -54,14 +42,14 @@ describe("WS endpoint auth", () => {
             ws.onopen = () => {
                 resolve({ ws, closed });
             };
-            ws.onerror = (ev: Event) => {
+            ws.onerror = () => {
                 // Let onclose handle it
             };
         });
     }
 
     test("valid token → connection stays open, can register", async () => {
-        const { ws, closed } = await wsConnect();
+        const { ws } = await wsConnect();
 
         // Send auth
         ws.send(JSON.stringify({ auth: token }));
@@ -95,8 +83,6 @@ describe("WS endpoint auth", () => {
     });
 
     test("invalid token → server closes with code 4003", async () => {
-        const { closed } = await wsConnect();
-
         // Send bad auth
         const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
         const closePromise = new Promise<{ code: number; reason: string }>((res) => {
@@ -208,11 +194,6 @@ describe("WS endpoint auth", () => {
         const ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
         const messages: string[] = [];
 
-        const closePromise = new Promise<{ code: number; reason: string }>((res) => {
-            ws.onclose = (ev: CloseEvent) => {
-                res({ code: ev.code, reason: ev.reason });
-            };
-        });
         ws.onmessage = (ev: MessageEvent) => {
             messages.push(typeof ev.data === "string" ? ev.data : ev.data.toString());
         };

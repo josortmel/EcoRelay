@@ -31,7 +31,7 @@ function unixRequest(
 ): Promise<Record<string, unknown>> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
-        const off = readLines(s, (line: string) => {
+        readLines(s, (line: string) => {
             const parsed = JSON.parse(line);
             if (parsed.type === "ping") {
                 writeLine(s, { type: "pong", req_id: parsed.req_id });
@@ -207,7 +207,7 @@ describe("Integration: cross-transport messaging", () => {
         const ws = await wsRegister("oc-rename-me");
         let renameAck = false;
 
-        const result = await new Promise<string>((resolve, reject) => {
+        await new Promise<string>((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error("timeout")), 5_000);
             ws.onmessage = (ev: MessageEvent): void => {
                 const msg = JSON.parse(ev.data.toString());

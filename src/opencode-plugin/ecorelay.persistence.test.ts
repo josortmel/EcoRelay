@@ -149,8 +149,6 @@ describe("savePeerId — tmp+rename atomic write", () => {
 });
 
 describe("loadCache — edge cases", () => {
-    const origPath = PEER_ID_CACHE;
-
     beforeEach(() => {
         try {
             fs.unlinkSync(PEER_ID_CACHE);
