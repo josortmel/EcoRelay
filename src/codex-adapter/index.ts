@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     // ── MCP server ────────────────────────────────────────────────
 
     const server = new Server(
-        { name: "ecorelay", version: "1.0.1" },
+        { name: "ecorelay", version: "1.0.2" },
         {
             capabilities: {
                 tools: {},
