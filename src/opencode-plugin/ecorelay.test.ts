@@ -74,13 +74,16 @@ describe("Server export", () => {
 });
 
 describe("Server lifecycle", () => {
-    test("bootstrap calls client.session.list", async () => {
+    // Since 2026-05-30 (7b90d23) the plugin does NOT list existing sessions at startup:
+    // that registered every historical OpenCode session as a zombie peer. Peers come
+    // only from session.created events. This test keeps it that way.
+    test("bootstrap does not list historical sessions (they became zombie peers)", async () => {
         const listSpy = mockSessionList([]);
         const input = mockPluginInput({
             client: { session: { list: listSpy, prompt: mock(async () => {}) } },
         });
         const hooks = await _server(asInput(input));
-        expect(listSpy).toHaveBeenCalled();
+        expect(listSpy).not.toHaveBeenCalled();
         expect(typeof hooks.dispose).toBe("function");
         expect(typeof hooks.event).toBe("function");
         expect(hooks.tool).toBeDefined();

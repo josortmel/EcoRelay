@@ -26,7 +26,8 @@ async function run(): Promise<void> {
     const hub = await startHub({
         socketPath,
         wsPort,
-        ...(noIdle ? { onIdleExit: () => log.info("idle_exit_suppressed") } : {}),
+        // The daemon is the one place where an idle hub ends its own process.
+        onIdleExit: noIdle ? () => log.info("idle_exit_suppressed") : () => process.exit(0),
     });
     log.info("daemon_start", { socketPath, pid: process.pid });
 

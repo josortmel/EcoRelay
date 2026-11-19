@@ -238,11 +238,15 @@ describe("Tool → Hub message mapping", () => {
 
 describe("Tool error handling (no Hub running)", () => {
     test("relay_send throws when no Hub token available", async () => {
-        const hooks = await server(
-            (await mockPluginInput({
-                sessions: [{ id: "test-session", title: "Test Session" }],
-            })) as any,
-        );
+        const hooks = await server((await mockPluginInput()) as any);
+        // Peers are created by session.created. Since 2026-05-30 (7b90d23) the plugin no
+        // longer lists historical sessions at startup: they became zombie peers.
+        await hooks.event!({
+            event: {
+                type: "session.created",
+                properties: { info: { id: "test-session", title: "Test Session" } },
+            },
+        } as any);
 
         await expect(
             getTools(hooks).relay_send!.execute(

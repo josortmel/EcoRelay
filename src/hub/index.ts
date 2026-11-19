@@ -40,6 +40,10 @@ const log = makeLogger("hub");
 export type StartHubOptions = {
     socketPath: string;
     idleExitMs?: number;
+    /**
+     * Called when the hub has had no peers for idleExitMs. Default: only logs. The hub
+     * never exits its host process on its own; the daemon passes process.exit itself.
+     */
     onIdleExit?: () => void;
     /**
      * Interval in ms for the proactive sweep that probes all registered peers
@@ -61,7 +65,7 @@ export type HubHandle = { close: () => Promise<void> };
 export async function startHub(opts: StartHubOptions): Promise<HubHandle> {
     const { socketPath } = opts;
     const idleExitMs = opts.idleExitMs ?? 10 * 1000;
-    const onIdleExit = opts.onIdleExit ?? (() => process.exit(0));
+    const onIdleExit = opts.onIdleExit ?? (() => log.info("idle_exit_no_handler"));
 
     const dir = path.dirname(socketPath);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });

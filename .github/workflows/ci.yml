@@ -36,6 +36,24 @@ jobs:
               if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: bun run format:check
 
+            # A run cut short can still exit 0: for five months a hub started by a test
+            # called process.exit(0) after 10 s idle, so CI ran ~400 of 850 tests and
+            # reported green. Require bun's summary and at least MIN_TESTS tests.
+            # Removing tests on purpose? Lower MIN_TESTS in the same PR.
             - name: Test
               if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-              run: bun test
+              shell: bash
+              env:
+                  MIN_TESTS: 850
+              run: |
+                  set +e
+                  bun test 2>&1 | tee test-output.txt
+                  status=${PIPESTATUS[0]}
+                  ran=$(grep -oE '^Ran [0-9]+ tests' test-output.txt | grep -oE '[0-9]+' | tail -1)
+                  ran=${ran:-0}
+                  echo "tests run: $ran (minimum $MIN_TESTS), bun exit code: $status"
+                  if [ "$ran" -lt "$MIN_TESTS" ]; then
+                      echo "::error::only $ran tests ran (expected at least $MIN_TESTS): the run was cut short or tests were lost"
+                      exit 1
+                  fi
+                  exit "$status"

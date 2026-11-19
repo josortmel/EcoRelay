@@ -153,11 +153,8 @@ describe("Verifier: isProcessAlive edge cases", () => {
         expect(isProcessAlive(2147483647)).toBe(false);
     });
 
-    test("AT13: PID 0 → behavior documented (OS-dependent: Windows returns false)", () => {
-        // On Windows, process.kill(0, 0) throws EINVAL (PID 0 invalid) → false
-        // On Linux, kill(0, 0) sends to the process group → might return true
-        const result = isProcessAlive(0);
-        expect(typeof result).toBe("boolean"); // whatever it returns, it's a boolean
+    test("AT13: PID 0 → false (on Linux, kill(0, 0) means the whole process group)", () => {
+        expect(isProcessAlive(0)).toBe(false);
     });
 
     test("AT14: parent process PID is alive", () => {
