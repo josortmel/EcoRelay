@@ -6,6 +6,10 @@ on:
     push:
         branches: [main]
 
+# Read-only by default; the release job asks for write access for itself only.
+permissions:
+    contents: read
+
 jobs:
     check:
         runs-on: ubuntu-latest
@@ -57,3 +61,37 @@ jobs:
                       exit 1
                   fi
                   exit "$status"
+
+    # CD: when main is green and package.json states a version that has no tag yet, tag
+    # that commit and publish the release, with its CHANGELOG.md section as the notes.
+    # Nobody has to remember: bump the version in a PR (scripts/bump-version.ts), write
+    # the CHANGELOG section (src/version.test.ts requires it), merge.
+    release:
+        needs: check
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Release the package.json version if it has no tag yet
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  version=$(jq -r .version package.json)
+                  tag="v$version"
+                  if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+                      echo "$tag is already released: nothing to do"
+                      exit 0
+                  fi
+                  awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} on && index($0, "## [") == 1 {exit} on {print}' CHANGELOG.md > notes.md
+                  if ! grep -q '[^[:space:]]' notes.md; then
+                      echo "::error::CHANGELOG.md has no section for [$version]"
+                      exit 1
+                  fi
+                  gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file notes.md
+                  echo "released $tag at $GITHUB_SHA"
