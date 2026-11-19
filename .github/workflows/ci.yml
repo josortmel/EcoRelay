@@ -14,18 +14,28 @@ jobs:
 
             - uses: oven-sh/setup-bun@v2
               with:
-                  bun-version: latest
+                  # Fixed version: a new bun release must not turn CI red on its own.
+                  # Bump it on purpose, in its own PR.
+                  bun-version: 1.3.12
 
-            - run: bun install --frozen-lockfile
+            - id: install
+              run: bun install --frozen-lockfile
 
+            # Every check runs even if an earlier one fails, so each PR shows the
+            # result of all four (a red typecheck hid lint and format for 5 months).
+            # They only run if the install worked: without dependencies they mean nothing.
             - name: Typecheck
+              if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: bun run typecheck
 
             - name: Lint
+              if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: bun run lint
 
             - name: Format
+              if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: bun run format:check
 
             - name: Test
+              if: ${{ !cancelled() && steps.install.outcome == 'success' }}
               run: bun test
