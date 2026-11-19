@@ -4,6 +4,21 @@ All notable changes to Eco Relay are documented here. Format based on [Keep a Ch
 
 Eco Relay is based on [claude-relay](https://github.com/innestic/claude-relay) by Innestic (MIT). Versions prior to 0.5.0 were developed as an internal fork under [EcoConsulting/claude-relay](https://github.com/EcoConsulting/claude-relay).
 
+## [1.0.2] — 2026-11-19
+
+### Fixed
+
+- **A hub embedded in another process no longer exits it.** `startHub` called `process.exit(0)` after 10 s with no peers unless told otherwise, and its idle timer starts with the hub. Only the daemon exits on idle now, and it asks for it explicitly.
+- **WebSocket auth no longer throws on a non-object payload.** A first message of valid JSON such as `null` threw inside the handler; the connection only closed when the 5 s auth timer fired. It is now rejected at once with `auth_failed`.
+- **`spawnHub` listens on the port it was asked for.** It ignored `wsPort`, while `bootstrapHub` wrote it to the lock and returned it as the hub's port.
+- **Codex launcher on Windows.** When Windows reserves the 4580–4599 range (Hyper-V / WinNAT), the app-server now gets a free port from the OS instead of failing to start. A PID of `0` or below is never treated as a live app-server (on Linux, `kill(-1|0, 0)` succeeds).
+
+### Changed
+
+- CI runs every check (typecheck, lint, format, tests) even when one fails, pins bun, and fails if the test run is cut short. It had been red since 2026-06-20 without anyone seeing it, and green while running only ~400 of ~850 tests.
+- Tests run with a throwaway home directory and without the live relay's settings: they no longer write into the real `~/.eco-relay` or `~/.cache/ecorelay`.
+- Releases are published by CI when `main` is green with a new version in `package.json`. The version is stated in 9 files; a test keeps them equal, and `scripts/bump-version.ts` changes them all.
+
 ## [1.0.1] — 2026-09-30
 
 ### Fixed

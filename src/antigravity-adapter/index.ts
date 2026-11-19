@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     // ── MCP server (relay tools → agy can RESPOND) ────────────────
 
     const server = new Server(
-        { name: "ecorelay", version: "1.0.1" },
+        { name: "ecorelay", version: "1.0.2" },
         {
             capabilities: { tools: {} },
             instructions: INSTRUCTIONS,

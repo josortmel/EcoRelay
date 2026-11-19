@@ -132,7 +132,7 @@ export class AppServerClient {
             clientInfo: {
                 name: "ecorelay-codex-adapter",
                 title: "EcoRelay Codex Adapter",
-                version: "1.0.1",
+                version: "1.0.2",
             },
             capabilities: {
                 experimentalApi: true,
