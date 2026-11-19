@@ -12,3 +12,6 @@ dist/
 refactor_*.md
 *_plan.md
 *_spec.md
+
+# Marker written by src/channel/bootstrap-deps.ts after installing dependencies
+.bootstrap-deps-ok
