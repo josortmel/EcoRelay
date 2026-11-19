@@ -1,3 +1,7 @@
+// Standalone PoC script, kept as reference (see CHANGELOG). The export makes it a
+// module, so its top-level names do not clash with the other PoC scripts.
+export {};
+
 /**
  * Stress tests para validar edge cases del plan de integración.
  *

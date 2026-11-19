@@ -201,9 +201,7 @@ describe("VS24: concurrent urgent burst during active thread respects maxTurnsPe
 
         const { appServer, turnCalls } = createAppServer();
         const router = new PushRouter({
-            appServer: {
-                ...appServer,
-            },
+            appServer,
             threadTracker: tracker,
             batchDelayMs: 999999,
             maxTurnsPerMin: 5,
