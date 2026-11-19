@@ -1,5 +1,5 @@
-import type { AppServerClient, ThreadInfo, ThreadStatusChangedEvent } from "./app-server-client";
 import { makeLogger } from "../logger";
+import type { AppServerClient, ThreadInfo, ThreadStatusChangedEvent } from "./app-server-client";
 
 const log = makeLogger("codex-thread-tracker");
 
@@ -121,9 +121,12 @@ export class ThreadTracker {
     handleThreadStatusChanged(event: ThreadStatusChangedEvent): void {
         if (event.threadId !== this.trackedThreadId) return;
 
-        const newStatus = event.status.type === "active" ? "active"
-            : event.status.type === "idle" ? "idle"
-            : "unknown";
+        const newStatus =
+            event.status.type === "active"
+                ? "active"
+                : event.status.type === "idle"
+                  ? "idle"
+                  : "unknown";
 
         const prev = this.trackedStatus;
         this.trackedStatus = newStatus;
@@ -172,7 +175,11 @@ export class ThreadTracker {
                         if (info.status?.type === "archived") continue;
                         if (info.updatedAt && info.updatedAt > Date.now() + 5_000) continue;
 
-                        if (info.updatedAt && current.updatedAt && info.updatedAt > current.updatedAt) {
+                        if (
+                            info.updatedAt &&
+                            current.updatedAt &&
+                            info.updatedAt > current.updatedAt
+                        ) {
                             const resumed = await this.appServer.threadResume(id);
                             if (resumed) {
                                 log.info("thread_switched_newer", {

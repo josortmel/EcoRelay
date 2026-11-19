@@ -1,6 +1,10 @@
 // Verifier edge cases — T2 app-server-client.ts
 import { describe, expect, test } from "bun:test";
-import { AppServerClient, type AppServerNotification, type ThreadStatusChangedEvent } from "./app-server-client";
+import {
+    AppServerClient,
+    type AppServerNotification,
+    type ThreadStatusChangedEvent,
+} from "./app-server-client";
 
 class MockWebSocket {
     static readonly OPEN = 1;
@@ -13,7 +17,9 @@ class MockWebSocket {
         if (this.readyState !== MockWebSocket.OPEN) throw new Error("not open");
         this.sent.push(data);
     }
-    close(): void { this.readyState = MockWebSocket.CLOSED; }
+    close(): void {
+        this.readyState = MockWebSocket.CLOSED;
+    }
     simulateMessage(data: unknown): void {
         this.onmessage?.({ data: JSON.stringify(data) });
     }
@@ -21,14 +27,19 @@ class MockWebSocket {
         this.onmessage?.({ data: raw });
     }
     get lastSent(): Record<string, unknown> | null {
-        return this.sent.length === 0 ? null : JSON.parse(this.sent[this.sent.length - 1]!) as Record<string, unknown>;
+        return this.sent.length === 0
+            ? null
+            : (JSON.parse(this.sent[this.sent.length - 1]!) as Record<string, unknown>);
     }
     sentAt(i: number): Record<string, unknown> {
         return JSON.parse(this.sent[i]!) as Record<string, unknown>;
     }
 }
 
-function makeClient(opts?: { onNotification?: (n: AppServerNotification) => void; onThreadStatusChanged?: (e: ThreadStatusChangedEvent) => void }) {
+function makeClient(opts?: {
+    onNotification?: (n: AppServerNotification) => void;
+    onThreadStatusChanged?: (e: ThreadStatusChangedEvent) => void;
+}) {
     const notifications: AppServerNotification[] = [];
     const statusEvents: ThreadStatusChangedEvent[] = [];
     const client = new AppServerClient({
@@ -62,7 +73,7 @@ describe("Verifier: initialize (plan gap)", () => {
     test("AT2: initialize sends initialized notification after result", async () => {
         const { client, ws } = makeClient();
         const p = client.initialize();
-        const id = (ws.sentAt(0)).id as number;
+        const id = ws.sentAt(0).id as number;
         ws.simulateMessage({ id, result: {} });
         await p;
         // Second sent message should be the "initialized" notification (no id)
@@ -81,7 +92,7 @@ describe("Verifier: reconnect backoff constants (plan gap)", () => {
         // Formula: min(3000 * 2^attempts, 60000)
         const initial = 3_000;
         const max = 60_000;
-        expect(initial * Math.pow(2, 0)).toBe(3_000);  // 3s start
+        expect(initial * Math.pow(2, 0)).toBe(3_000); // 3s start
         expect(Math.min(initial * Math.pow(2, 5), max)).toBe(60_000); // capped at 60s after 5 attempts
         expect(Math.min(initial * Math.pow(2, 4), max)).toBe(48_000); // 48s (still below cap)
     });

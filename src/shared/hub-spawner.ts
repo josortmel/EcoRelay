@@ -198,10 +198,7 @@ export type HubHandle = {
     child: ChildProcess;
 };
 
-export function spawnHub(
-    socketPath: string,
-    wsPort: number,
-): HubHandle {
+export function spawnHub(socketPath: string, wsPort: number): HubHandle {
     const env = { ...process.env, RELAY_HUB_SOCKET: socketPath };
 
     const child = spawn("bun", ["run", DAEMON_ENTRY], {
@@ -247,10 +244,7 @@ export type HubInfo = {
     wsPort: number;
 };
 
-export async function bootstrapHub(
-    socketPath: string,
-    wsPort: number,
-): Promise<HubInfo> {
+export async function bootstrapHub(socketPath: string, wsPort: number): Promise<HubInfo> {
     const lock = acquireLock(socketPath, wsPort);
 
     if (lock.owned) {
@@ -272,9 +266,7 @@ export async function bootstrapHub(
                 // ignore
             }
             deleteLock();
-            throw new Error(
-                `Hub did not become ready at ${lock.socketPath} within timeout`,
-            );
+            throw new Error(`Hub did not become ready at ${lock.socketPath} within timeout`);
         }
         sock.destroy();
         return { socketPath: lock.socketPath, wsPort: lock.wsPort };
@@ -302,9 +294,8 @@ export async function spawnDetachedDaemon(
     socketPath: string,
 ): Promise<{ close: () => Promise<void> }> {
     const rawPort = Number(process.env.ECORELAY_WS_PORT || "19736");
-    const defaultWsPort = Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
-        ? rawPort
-        : 19736;
+    const defaultWsPort =
+        Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535 ? rawPort : 19736;
     const handle = spawnHub(socketPath, defaultWsPort);
     return { close: () => handle.close() };
 }

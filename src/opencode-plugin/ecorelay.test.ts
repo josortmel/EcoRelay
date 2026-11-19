@@ -1,6 +1,6 @@
-import { describe, expect, test, mock, beforeAll, afterAll } from "bun:test";
-import * as path from "node:path";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as os from "node:os";
+import * as path from "node:path";
 
 let _server: any;
 const _prevDaemonPath = process.env.ECORELAY_DAEMON_PATH;
@@ -70,7 +70,9 @@ describe("Server lifecycle", () => {
         const input = mockPluginInput({
             client: {
                 session: {
-                    list: mock(async () => { throw new Error("OC not ready"); }),
+                    list: mock(async () => {
+                        throw new Error("OC not ready");
+                    }),
                     prompt: mock(async () => {}),
                 },
             },
@@ -107,12 +109,25 @@ describe("Tool registration", () => {
         const hooks = await _server(input as any);
 
         const toolNames = [
-            "relay_send", "relay_inbox", "relay_reply", "relay_broadcast",
-            "relay_peers", "relay_rename", "relay_join", "relay_leave",
-            "relay_room", "relay_rooms",
-            "relay_group_create", "relay_group_invite", "relay_group_remove",
-            "relay_group_leave", "relay_group_send", "relay_group_history",
-            "relay_group_list", "relay_group_info", "relay_group_delete",
+            "relay_send",
+            "relay_inbox",
+            "relay_reply",
+            "relay_broadcast",
+            "relay_peers",
+            "relay_rename",
+            "relay_join",
+            "relay_leave",
+            "relay_room",
+            "relay_rooms",
+            "relay_group_create",
+            "relay_group_invite",
+            "relay_group_remove",
+            "relay_group_leave",
+            "relay_group_send",
+            "relay_group_history",
+            "relay_group_list",
+            "relay_group_info",
+            "relay_group_delete",
         ];
 
         expect(Object.keys(hooks.tool!).length).toBe(19);
@@ -148,7 +163,9 @@ describe("Event handler", () => {
         ).resolves.toBeUndefined();
         // Invalid: .info without id
         await expect(
-            hooks.event!({ event: { type: "session.created", properties: { info: {} as any } } } as any),
+            hooks.event!({
+                event: { type: "session.created", properties: { info: {} as any } },
+            } as any),
         ).resolves.toBeUndefined();
         // Invalid: null .info
         await expect(
@@ -200,7 +217,9 @@ describe("Event handler", () => {
         ).resolves.toBeUndefined();
         // Invalid: .info without id
         await expect(
-            hooks.event!({ event: { type: "session.deleted", properties: { info: {} as any } } } as any),
+            hooks.event!({
+                event: { type: "session.deleted", properties: { info: {} as any } },
+            } as any),
         ).resolves.toBeUndefined();
     });
 
@@ -226,13 +245,19 @@ describe("Event handler", () => {
 
         const sid = "churn-session";
         await hooks.event!({
-            event: { type: "session.created", properties: { info: { id: sid, title: "Churn" } } } as any,
+            event: {
+                type: "session.created",
+                properties: { info: { id: sid, title: "Churn" } },
+            } as any,
         });
         await hooks.event!({
             event: { type: "session.deleted", properties: { info: { id: sid } } } as any,
         });
         await hooks.event!({
-            event: { type: "session.created", properties: { info: { id: sid, title: "Again" } } } as any,
+            event: {
+                type: "session.created",
+                properties: { info: { id: sid, title: "Again" } },
+            } as any,
         });
         // Full cycle via .info API — no crash
         expect(true).toBe(true);

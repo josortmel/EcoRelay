@@ -7,7 +7,7 @@
  * Port-race window between bind-close and spawn is minimal and loopback-only.
  */
 
-import { spawn, execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
@@ -65,7 +65,8 @@ export function readPidFile(): { pid: number; port: number } | null {
     try {
         const raw = fs.readFileSync(PID_FILE, "utf8");
         const data = JSON.parse(raw) as { pid?: number; port?: number };
-        if (typeof data.pid === "number" && typeof data.port === "number") return data as { pid: number; port: number };
+        if (typeof data.pid === "number" && typeof data.port === "number")
+            return data as { pid: number; port: number };
         return null;
     } catch {
         return null;
@@ -80,7 +81,11 @@ export function writePidFile(pid: number, port: number): void {
 }
 
 export function deletePidFile(): void {
-    try { fs.unlinkSync(PID_FILE); } catch { /* ignore */ }
+    try {
+        fs.unlinkSync(PID_FILE);
+    } catch {
+        /* ignore */
+    }
 }
 
 // ── WS readiness check ───────────────────────────────────────────
@@ -90,12 +95,28 @@ export async function waitForReady(port: number): Promise<boolean> {
         try {
             const ws = new WebSocket(`ws://127.0.0.1:${port}`);
             const ok = await new Promise<boolean>((resolve) => {
-                const timer = setTimeout(() => { try { ws.close(); } catch {} resolve(false); }, 400);
-                ws.onopen = () => { clearTimeout(timer); try { ws.close(); } catch {} resolve(true); };
-                ws.onerror = () => { clearTimeout(timer); resolve(false); };
+                const timer = setTimeout(() => {
+                    try {
+                        ws.close();
+                    } catch {}
+                    resolve(false);
+                }, 400);
+                ws.onopen = () => {
+                    clearTimeout(timer);
+                    try {
+                        ws.close();
+                    } catch {}
+                    resolve(true);
+                };
+                ws.onerror = () => {
+                    clearTimeout(timer);
+                    resolve(false);
+                };
             });
             if (ok) return true;
-        } catch { /* retry */ }
+        } catch {
+            /* retry */
+        }
         await new Promise((r) => setTimeout(r, READINESS_INTERVAL_MS));
     }
     return false;
@@ -126,7 +147,9 @@ export function findCodexBin(): string {
             const validated = validateCodexPath(candidate);
             if (validated) return validated;
         }
-    } catch { /* fallback */ }
+    } catch {
+        /* fallback */
+    }
 
     const local = path.join(os.homedir(), "AppData", "Local", "OpenAI", "Codex", "bin");
     const SEMVER_DIR_RE = /^\d+\.\d+(\.\d+)?/;
@@ -178,7 +201,9 @@ async function main(): Promise<void> {
         } else {
             // VS36: Cannot prove identity of the alive pid on Windows.
             // Don't kill it — it may not be ours. Spawn fresh on a new port.
-            console.log(`PID ${existing.pid} alive but not responding as app-server. Spawning fresh.`);
+            console.log(
+                `PID ${existing.pid} alive but not responding as app-server. Spawning fresh.`,
+            );
             deletePidFile();
             port = await findFreePort(PORT_MIN, PORT_MAX);
             weOwnAppServer = true;
@@ -215,7 +240,11 @@ async function main(): Promise<void> {
         const ready = await waitForReady(port);
         if (!ready) {
             console.error("App-server did not become ready in time.");
-            try { appServer.kill(); } catch { /* ignore */ }
+            try {
+                appServer.kill();
+            } catch {
+                /* ignore */
+            }
             deletePidFile();
             process.exit(1);
         }
@@ -233,7 +262,11 @@ async function main(): Promise<void> {
 
     const cleanup = (): void => {
         if (weOwnAppServer && appServerPid) {
-            try { process.kill(appServerPid); } catch { /* ignore */ }
+            try {
+                process.kill(appServerPid);
+            } catch {
+                /* ignore */
+            }
             deletePidFile();
         }
     };
@@ -243,8 +276,16 @@ async function main(): Promise<void> {
         process.exit(code ?? 0);
     });
 
-    process.on("SIGTERM", () => { codex.kill(); cleanup(); process.exit(130); });
-    process.on("SIGINT", () => { codex.kill(); cleanup(); process.exit(130); });
+    process.on("SIGTERM", () => {
+        codex.kill();
+        cleanup();
+        process.exit(130);
+    });
+    process.on("SIGINT", () => {
+        codex.kill();
+        cleanup();
+        process.exit(130);
+    });
     process.on("exit", cleanup);
     process.on("uncaughtException", (err) => {
         console.error(`Uncaught: ${err.message}`);

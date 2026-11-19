@@ -1,12 +1,12 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+    _resetHubSpawnedForTest,
+    getAuthToken,
     HubClient,
     validateBunPath,
-    getAuthToken,
-    _resetHubSpawnedForTest,
     type HubIncomingMessage,
 } from "./hub-client";
 import { _resetForTest as resetIdentity } from "./identity";
@@ -291,7 +291,12 @@ describe("sendAndWait", () => {
 
 describe("validateBunPath", () => {
     test("accepts real bun path if it exists", () => {
-        const bunPath = path.join(os.homedir(), ".bun", "bin", process.platform === "win32" ? "bun.exe" : "bun");
+        const bunPath = path.join(
+            os.homedir(),
+            ".bun",
+            "bin",
+            process.platform === "win32" ? "bun.exe" : "bun",
+        );
         if (fs.existsSync(bunPath)) {
             expect(validateBunPath(bunPath)).not.toBeNull();
         } else {
@@ -339,7 +344,11 @@ describe("getAuthToken", () => {
         const orig = process.env.ECORELAY_WS_TOKEN;
         process.env.ECORELAY_WS_TOKEN = "test-token-123";
         expect(getAuthToken()).toBe("test-token-123");
-        if (orig) { process.env.ECORELAY_WS_TOKEN = orig; } else { delete process.env.ECORELAY_WS_TOKEN; }
+        if (orig) {
+            process.env.ECORELAY_WS_TOKEN = orig;
+        } else {
+            delete process.env.ECORELAY_WS_TOKEN;
+        }
     });
 
     test("error message mentions hub-ws-token when file missing", () => {
@@ -458,7 +467,12 @@ describe("peer name", () => {
 describe("fireSend", () => {
     test("sends JSON without waiting for response", () => {
         const { client, ws } = makeClient();
-        client.fireSend({ type: "broadcast", question: "hello?", broadcast_id: "b1", exclude_self: true });
+        client.fireSend({
+            type: "broadcast",
+            question: "hello?",
+            broadcast_id: "b1",
+            exclude_self: true,
+        });
         expect(ws.sent).toHaveLength(1);
         const sent = ws.lastSentParsed!;
         expect(sent.type).toBe("broadcast");

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { callTool, getToolSchemas, errResult, okResult } from "./tools";
 import type { HubClient } from "./hub-client";
+import { callTool, getToolSchemas } from "./tools";
 
 // ── Mock HubClient ────────────────────────────────────────────────
 
@@ -18,7 +18,9 @@ function createMockHub(response?: Record<string, unknown>): {
     let _name = "codex-test";
 
     const hub = {
-        get name() { return _name; },
+        get name() {
+            return _name;
+        },
         messageSenders,
         broadcastReceipts,
         sendAndWait: async (payload: Record<string, unknown>) => {
@@ -28,7 +30,9 @@ function createMockHub(response?: Record<string, unknown>): {
         fireSend: (payload: Record<string, unknown>) => {
             fireCalls.push(payload);
         },
-        _setPeerName: (n: string) => { _name = n; },
+        _setPeerName: (n: string) => {
+            _name = n;
+        },
     } as unknown as HubClient;
 
     return { hub, sendCalls, fireCalls };
@@ -55,7 +59,9 @@ describe("getToolSchemas", () => {
     });
 
     test("exact 19 tool names", () => {
-        const names = getToolSchemas().map((s) => s.name).sort();
+        const names = getToolSchemas()
+            .map((s) => s.name)
+            .sort();
         expect(names).toEqual([
             "relay_broadcast",
             "relay_group_create",
@@ -99,7 +105,11 @@ describe("relay_peers", () => {
 
 describe("relay_send", () => {
     test("sends message and returns ack", async () => {
-        const { hub, sendCalls } = createMockHub({ type: "send_ack", msg_id: "m-1", status: "delivered" });
+        const { hub, sendCalls } = createMockHub({
+            type: "send_ack",
+            msg_id: "m-1",
+            status: "delivered",
+        });
         const result = await callTool(hub, "relay_send", { to: "alice", text: "hello" });
         expect(result.isError).toBeUndefined();
         const parsed = JSON.parse(result.content[0]!.text);
@@ -119,10 +129,17 @@ describe("relay_send", () => {
 
 describe("relay_reply", () => {
     test("auto-detects sender from messageSenders and routes as send", async () => {
-        const { hub, sendCalls } = createMockHub({ type: "send_ack", msg_id: "m-2", status: "delivered" });
+        const { hub, sendCalls } = createMockHub({
+            type: "send_ack",
+            msg_id: "m-2",
+            status: "delivered",
+        });
         hub.messageSenders.set("msg-123", "alice");
 
-        const result = await callTool(hub, "relay_reply", { ask_id: "msg-123", text: "reply text" });
+        const result = await callTool(hub, "relay_reply", {
+            ask_id: "msg-123",
+            text: "reply text",
+        });
         expect(result.isError).toBeUndefined();
         expect(sendCalls[0]!.type).toBe("send");
         expect(sendCalls[0]!.to).toBe("alice");
@@ -190,7 +207,11 @@ describe("length caps", () => {
 
     test("relay_group_remove rejects reason > 256", async () => {
         const { hub } = createMockHub();
-        const result = await callTool(hub, "relay_group_remove", { group: "g", peer: "p", reason: "r".repeat(257) });
+        const result = await callTool(hub, "relay_group_remove", {
+            group: "g",
+            peer: "p",
+            reason: "r".repeat(257),
+        });
         expect(result.isError).toBe(true);
     });
 

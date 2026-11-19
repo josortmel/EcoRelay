@@ -161,7 +161,9 @@ function initialPeerName(cwd) {
     if (cached && safeName(cached)) return cached;
     const base = path.basename(cwd || "") || "session";
     const cleanBase = base.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 50);
-    return safeName(`copilot-${cleanBase}`) ?? `copilot-${String(state.sessionId ?? "").slice(0, 8)}`;
+    return (
+        safeName(`copilot-${cleanBase}`) ?? `copilot-${String(state.sessionId ?? "").slice(0, 8)}`
+    );
 }
 
 function updateCwd(dir) {
@@ -234,7 +236,10 @@ async function pushToCopilot(text) {
         await state.session.send({ prompt: wrapUntrusted(text), mode: "enqueue" });
         return true;
     } catch (e) {
-        fileLog("error", `push via session.send failed: ${e instanceof Error ? e.message : String(e)}`);
+        fileLog(
+            "error",
+            `push via session.send failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
         return false;
     }
 }
@@ -1005,7 +1010,10 @@ const relayTools = [
         parameters: {
             type: "object",
             properties: {
-                limit: { type: "number", description: "Max messages to return (1-100, default 20)" },
+                limit: {
+                    type: "number",
+                    description: "Max messages to return (1-100, default 20)",
+                },
                 since_id: { type: "string", description: "Only return messages after this msg_id" },
             },
         },
@@ -1121,7 +1129,10 @@ const relayTools = [
         parameters: {
             type: "object",
             properties: {
-                name: { type: "string", description: "Group name (max 64 chars, [A-Za-z0-9._-] only)" },
+                name: {
+                    type: "string",
+                    description: "Group name (max 64 chars, [A-Za-z0-9._-] only)",
+                },
                 members: {
                     type: "array",
                     items: { type: "string" },
@@ -1213,8 +1224,7 @@ const relayTools = [
     },
     {
         name: "relay_group_list",
-        description:
-            "List all persistent groups you are a member of, with unread count per group.",
+        description: "List all persistent groups you are a member of, with unread count per group.",
         parameters: { type: "object", properties: {} },
         skipPermission: true,
         handler: async () => toolGroupList(),
@@ -1319,18 +1329,18 @@ if (!process.env.ECORELAY_TEST) {
 
 // Exported for unit tests only — no effect on the extension runtime.
 export {
-    formatMessage,
+    errResult,
     formatBroadcast,
+    formatGroup,
+    formatMessage,
     formatReply,
     formatRoom,
-    formatGroup,
-    wrapUntrusted,
     isNewer,
-    safeName,
     nextReqId,
+    okResult,
+    relayTools,
+    safeName,
     suffixedName,
     wrapHandler,
-    okResult,
-    errResult,
-    relayTools,
+    wrapUntrusted,
 };

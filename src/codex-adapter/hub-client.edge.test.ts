@@ -1,12 +1,12 @@
 // Verifier edge cases — T3 hub-client.ts
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+    _resetHubSpawnedForTest,
     HubClient,
     validateBunPath,
-    _resetHubSpawnedForTest,
     type HubIncomingMessage,
 } from "./hub-client";
 import { _resetForTest as resetIdentity } from "./identity";
@@ -64,7 +64,9 @@ class HandshakeMockWS {
         return JSON.parse(this.sent[i]!) as Record<string, unknown>;
     }
 
-    get wasClosed(): boolean { return this._closed; }
+    get wasClosed(): boolean {
+        return this._closed;
+    }
 }
 
 let capturedWs: HandshakeMockWS | null = null;
@@ -77,7 +79,9 @@ function installMockWs(): HandshakeMockWS {
         static readonly OPEN = HandshakeMockWS.OPEN;
         static readonly CONNECTING = HandshakeMockWS.CONNECTING;
         static readonly CLOSED = HandshakeMockWS.CLOSED;
-        constructor() { return ws; }
+        constructor() {
+            return ws;
+        }
     };
     return ws;
 }
@@ -117,7 +121,9 @@ class MockWS {
         if (this.readyState !== MockWS.OPEN) throw new Error("not open");
         this.sent.push(data);
     }
-    close(): void { this.readyState = MockWS.CLOSED; }
+    close(): void {
+        this.readyState = MockWS.CLOSED;
+    }
     simulateMessage(data: unknown): void {
         this.onmessage?.({ data: JSON.stringify(data) });
     }
@@ -125,13 +131,24 @@ class MockWS {
         this.onmessage?.({ data: raw });
     }
     get lastSentParsed(): Record<string, unknown> | null {
-        return this.sent.length === 0 ? null : JSON.parse(this.sent[this.sent.length - 1]!) as Record<string, unknown>;
+        return this.sent.length === 0
+            ? null
+            : (JSON.parse(this.sent[this.sent.length - 1]!) as Record<string, unknown>);
     }
 }
 
-function makeClient(onMsg?: (msg: HubIncomingMessage) => void): { client: HubClient; ws: MockWS; messages: HubIncomingMessage[] } {
+function makeClient(onMsg?: (msg: HubIncomingMessage) => void): {
+    client: HubClient;
+    ws: MockWS;
+    messages: HubIncomingMessage[];
+} {
     const messages: HubIncomingMessage[] = [];
-    const client = new HubClient({ peerName: "codex-test", cwd: "/project", gitBranch: "main", onMessage: onMsg ?? ((m) => messages.push(m)) });
+    const client = new HubClient({
+        peerName: "codex-test",
+        cwd: "/project",
+        gitBranch: "main",
+        onMessage: onMsg ?? ((m) => messages.push(m)),
+    });
     const ws = new MockWS();
     client._setWsForTest(ws as unknown as WebSocket);
     return { client, ws, messages };
@@ -176,7 +193,11 @@ describe("Verifier: handshake (plan gap)", () => {
 
     test("AT2: ack saves peer id (calls savePeerId)", async () => {
         const ws = installMockWs();
-        const client = new HubClient({ peerName: "codex-save-test", cwd: "/save-proj", gitBranch: "main" });
+        const client = new HubClient({
+            peerName: "codex-save-test",
+            cwd: "/save-proj",
+            gitBranch: "main",
+        });
 
         const connectPromise = client.connect();
         ws.triggerOpen();
@@ -292,7 +313,11 @@ describe("Verifier: broadcastReceipts unbounded growth", () => {
     test("AT11: broadcastReceipts capped at 200 (OBS2 fixed — now has eviction)", () => {
         const { client, ws } = makeClient();
         for (let i = 0; i < 300; i++) {
-            ws.simulateMessage({ type: "broadcast_ack", broadcast_id: `bcast-${i}`, peer_count: i });
+            ws.simulateMessage({
+                type: "broadcast_ack",
+                broadcast_id: `bcast-${i}`,
+                peer_count: i,
+            });
         }
         // After fix: MAX_BROADCAST_RECEIPTS = 200 eviction cap added
         expect(client.broadcastReceipts.size).toBe(200);
@@ -335,7 +360,12 @@ describe("Verifier: messageSenders ring boundary", () => {
     test("AT15: exactly 200 messages → no eviction yet", () => {
         const { client, ws } = makeClient();
         for (let i = 0; i < 200; i++) {
-            ws.simulateMessage({ type: "incoming_message", from: `p${i}`, text: "x", msg_id: `m-${i}` });
+            ws.simulateMessage({
+                type: "incoming_message",
+                from: `p${i}`,
+                text: "x",
+                msg_id: `m-${i}`,
+            });
         }
         expect(client.messageSenders.size).toBe(200);
         expect(client.messageSenders.has("m-0")).toBe(true); // not yet evicted
@@ -344,7 +374,12 @@ describe("Verifier: messageSenders ring boundary", () => {
     test("AT16: 201st message evicts m-0", () => {
         const { client, ws } = makeClient();
         for (let i = 0; i <= 200; i++) {
-            ws.simulateMessage({ type: "incoming_message", from: `p${i}`, text: "x", msg_id: `m-${i}` });
+            ws.simulateMessage({
+                type: "incoming_message",
+                from: `p${i}`,
+                text: "x",
+                msg_id: `m-${i}`,
+            });
         }
         expect(client.messageSenders.size).toBe(200);
         expect(client.messageSenders.has("m-0")).toBe(false);

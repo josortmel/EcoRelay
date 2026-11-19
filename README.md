@@ -346,20 +346,20 @@ LAN and internet can coexist: add both `peers` (TCP) and `relay` (WebSocket) to 
 
 ## Roadmap
 
-| Version | Status   | What                                                    |
-| ------- | -------- | ------------------------------------------------------- |
-| v0.2    | Released | Ephemeral rooms                                         |
-| v0.3    | Released | Persistent groups with offline delivery                 |
-| v0.4    | Released | LAN federation (TCP bridge)                             |
-| v0.5    | Released | Claude Code plugin packaging                            |
-| v0.6    | Released | Persistent direct messaging (mailbox)                   |
-| v0.7    | Released | Internet federation (WebSocket relay)                   |
-| v0.8    | Released | Multi-platform: Claude Code + OpenCode unified          |
-| v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                |
-| v0.9    | Released | Codex CLI as a first-class peer via app-server          |
-| v0.9.1  | Released | Antigravity CLI as a first-class peer via `agentapi`    |
+| Version | Status   | What                                                                     |
+| ------- | -------- | ------------------------------------------------------------------------ |
+| v0.2    | Released | Ephemeral rooms                                                          |
+| v0.3    | Released | Persistent groups with offline delivery                                  |
+| v0.4    | Released | LAN federation (TCP bridge)                                              |
+| v0.5    | Released | Claude Code plugin packaging                                             |
+| v0.6    | Released | Persistent direct messaging (mailbox)                                    |
+| v0.7    | Released | Internet federation (WebSocket relay)                                    |
+| v0.8    | Released | Multi-platform: Claude Code + OpenCode unified                           |
+| v0.8.5  | Released | GitHub Copilot CLI as a first-class peer                                 |
+| v0.9    | Released | Codex CLI as a first-class peer via app-server                           |
+| v0.9.1  | Released | Antigravity CLI as a first-class peer via `agentapi`                     |
 | v1.0.1  | Current  | One hub per socket: simultaneous session starts no longer kill the relay |
-| v1.0.0  | Previous | Six-CLI universal relay: + Antigravity CLI + Cursor CLI |
+| v1.0.0  | Previous | Six-CLI universal relay: + Antigravity CLI + Cursor CLI                  |
 
 ## Error codes
 

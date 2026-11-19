@@ -1,0 +1,3 @@
+# Finales de línea LF en el repo y en todas las máquinas (Windows incluido),
+# para que la comprobación de formato en casa vea lo mismo que el CI.
+* text=auto eol=lf

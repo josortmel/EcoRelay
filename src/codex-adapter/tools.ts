@@ -1,8 +1,8 @@
+import { TOOLS, type ToolSchema } from "../channel/tool-schemas/index";
+import { makeLogger } from "../logger";
 import { MAX_TEXT_LEN, type ErrCode } from "../protocol";
 import type { HubClient } from "./hub-client";
-import { TOOLS, type ToolSchema } from "../channel/tool-schemas/index";
-import { safeName, savePeerId, resolveCwd } from "./identity";
-import { makeLogger } from "../logger";
+import { resolveCwd, safeName, savePeerId } from "./identity";
 
 const log = makeLogger("codex-tools");
 
@@ -115,7 +115,8 @@ async function toolSend(hub: HubClient, args: Record<string, unknown>): Promise<
     if (urgent) msg.urgent = true;
 
     const reply = (await hub.sendAndWait(msg)) as Record<string, unknown>;
-    if (reply.type === "send_ack") return okResult({ ok: true, msg_id: reply.msg_id, status: reply.status });
+    if (reply.type === "send_ack")
+        return okResult({ ok: true, msg_id: reply.msg_id, status: reply.status });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -129,7 +130,8 @@ async function toolInbox(hub: HubClient, args: Record<string, unknown>): Promise
     }
 
     const reply = (await hub.sendAndWait(msg)) as Record<string, unknown>;
-    if (reply.type === "inbox_result") return okResult({ messages: reply.messages, remaining: reply.remaining });
+    if (reply.type === "inbox_result")
+        return okResult({ messages: reply.messages, remaining: reply.remaining });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -170,7 +172,10 @@ async function toolRename(hub: HubClient, args: Record<string, unknown>): Promis
     const newName = args.new_name as string;
     if (typeof newName !== "string") return errResult("bad_args");
     if (!safeName(newName)) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "rename", new_name: newName })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "rename", new_name: newName })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "ack") {
         hub._setPeerName(newName);
         savePeerId(resolveCwd(), newName);
@@ -184,7 +189,8 @@ async function toolJoin(hub: HubClient, args: Record<string, unknown>): Promise<
     const room = args.room as string;
     if (typeof room !== "string" || room.length > 64) return errResult("bad_args");
     const reply = (await hub.sendAndWait({ type: "join_room", room })) as Record<string, unknown>;
-    if (reply.type === "room_ack") return okResult({ ok: true, room: reply.room, members: reply.members });
+    if (reply.type === "room_ack")
+        return okResult({ ok: true, room: reply.room, members: reply.members });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -201,11 +207,18 @@ async function toolLeave(hub: HubClient, args: Record<string, unknown>): Promise
 async function toolRoom(hub: HubClient, args: Record<string, unknown>): Promise<ToolResult> {
     const room = args.room as string;
     const text = args.text as string;
-    if (typeof room !== "string" || typeof text !== "string" || room.length > 64) return errResult("bad_args");
+    if (typeof room !== "string" || typeof text !== "string" || room.length > 64)
+        return errResult("bad_args");
     if (text.length > MAX_TEXT_LEN) return errResult("bad_args");
     const msgId = randomUUID();
-    const reply = (await hub.sendAndWait({ type: "room_msg", room, text, msg_id: msgId })) as Record<string, unknown>;
-    if (reply.type === "room_send_ack") return okResult({ ok: true, room: reply.room, delivered_count: reply.delivered_count });
+    const reply = (await hub.sendAndWait({
+        type: "room_msg",
+        room,
+        text,
+        msg_id: msgId,
+    })) as Record<string, unknown>;
+    if (reply.type === "room_send_ack")
+        return okResult({ ok: true, room: reply.room, delivered_count: reply.delivered_count });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -225,9 +238,12 @@ async function toolGroupCreate(hub: HubClient, args: Record<string, unknown>): P
     const validMembers = members.filter((m) => typeof m === "string");
     if (validMembers.some((m) => m.length > 64)) return errResult("bad_args");
     const reply = (await hub.sendAndWait({
-        type: "group_create", name, members: validMembers,
+        type: "group_create",
+        name,
+        members: validMembers,
     })) as Record<string, unknown>;
-    if (reply.type === "group_created") return okResult({ ok: true, group: reply.group, members: reply.members });
+    if (reply.type === "group_created")
+        return okResult({ ok: true, group: reply.group, members: reply.members });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -237,7 +253,10 @@ async function toolGroupInvite(hub: HubClient, args: Record<string, unknown>): P
     const peer = args.peer as string;
     if (typeof group !== "string" || typeof peer !== "string") return errResult("bad_args");
     if (group.length > 64 || peer.length > 64) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "group_invite", group, peer })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "group_invite", group, peer })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "group_ack") return okResult({ ok: true });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
@@ -247,9 +266,13 @@ async function toolGroupRemove(hub: HubClient, args: Record<string, unknown>): P
     const group = args.group as string;
     const peer = args.peer as string;
     const reason = args.reason as string;
-    if (typeof group !== "string" || typeof peer !== "string" || typeof reason !== "string") return errResult("bad_args");
+    if (typeof group !== "string" || typeof peer !== "string" || typeof reason !== "string")
+        return errResult("bad_args");
     if (group.length > 64 || peer.length > 64 || reason.length > 256) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "group_remove", group, peer, reason })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "group_remove", group, peer, reason })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "group_ack") return okResult({ ok: true });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
@@ -258,7 +281,10 @@ async function toolGroupRemove(hub: HubClient, args: Record<string, unknown>): P
 async function toolGroupLeave(hub: HubClient, args: Record<string, unknown>): Promise<ToolResult> {
     const group = args.group as string;
     if (typeof group !== "string" || group.length > 64) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "group_leave", group })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "group_leave", group })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "group_ack") return okResult({ ok: true });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
@@ -270,19 +296,31 @@ async function toolGroupSend(hub: HubClient, args: Record<string, unknown>): Pro
     if (typeof group !== "string" || typeof text !== "string") return errResult("bad_args");
     if (group.length > 64) return errResult("bad_args");
     if (text.length > MAX_TEXT_LEN) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "group_send", group, text })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "group_send", group, text })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "group_ack") return okResult({ ok: true });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
 
-async function toolGroupHistory(hub: HubClient, args: Record<string, unknown>): Promise<ToolResult> {
+async function toolGroupHistory(
+    hub: HubClient,
+    args: Record<string, unknown>,
+): Promise<ToolResult> {
     const group = args.group as string;
     if (typeof group !== "string" || group.length > 64) return errResult("bad_args");
     const msg: Record<string, unknown> = { type: "group_history", group };
     if (typeof args.limit === "number") msg.limit = args.limit;
     const reply = (await hub.sendAndWait(msg)) as Record<string, unknown>;
-    if (reply.type === "group_messages") return okResult({ ok: true, group: reply.group, messages: reply.messages, unread_remaining: reply.unread_remaining });
+    if (reply.type === "group_messages")
+        return okResult({
+            ok: true,
+            group: reply.group,
+            messages: reply.messages,
+            unread_remaining: reply.unread_remaining,
+        });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -298,7 +336,14 @@ async function toolGroupInfo(hub: HubClient, args: Record<string, unknown>): Pro
     const group = args.group as string;
     if (typeof group !== "string" || group.length > 64) return errResult("bad_args");
     const reply = (await hub.sendAndWait({ type: "group_info", group })) as Record<string, unknown>;
-    if (reply.type === "group_info_result") return okResult({ ok: true, group: reply.group, admin: reply.admin, members: reply.members, unread_count: reply.unread_count });
+    if (reply.type === "group_info_result")
+        return okResult({
+            ok: true,
+            group: reply.group,
+            admin: reply.admin,
+            members: reply.members,
+            unread_count: reply.unread_count,
+        });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");
 }
@@ -306,7 +351,10 @@ async function toolGroupInfo(hub: HubClient, args: Record<string, unknown>): Pro
 async function toolGroupDelete(hub: HubClient, args: Record<string, unknown>): Promise<ToolResult> {
     const group = args.group as string;
     if (typeof group !== "string" || group.length > 64) return errResult("bad_args");
-    const reply = (await hub.sendAndWait({ type: "group_delete", group })) as Record<string, unknown>;
+    const reply = (await hub.sendAndWait({ type: "group_delete", group })) as Record<
+        string,
+        unknown
+    >;
     if (reply.type === "group_ack") return okResult({ ok: true });
     if (reply.type === "err") return errResult(reply.code as string);
     return errResult("unexpected");

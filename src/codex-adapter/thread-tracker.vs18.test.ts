@@ -1,11 +1,17 @@
 // Verifier — Loop 3 fixpass-4: thread-tracker VS18 boundary test
 // VS18: future-date guard changed from now+60_000 to now+5_000
 import { describe, expect, test } from "bun:test";
-import { ThreadTracker } from "./thread-tracker";
 import type { AppServerClient, ThreadInfo } from "./app-server-client";
+import { ThreadTracker } from "./thread-tracker";
 
 function makeThread(overrides: Partial<ThreadInfo> & { id: string }): ThreadInfo {
-    return { preview: "some content", status: { type: "idle" }, updatedAt: 1000, createdAt: 1000, ...overrides };
+    return {
+        preview: "some content",
+        status: { type: "idle" },
+        updatedAt: 1000,
+        createdAt: 1000,
+        ...overrides,
+    };
 }
 
 // ── VS18: future-date guard window = 5s (was 60s) ────────────────
@@ -16,7 +22,8 @@ describe("VS18: future-date guard — now+5_000 threshold (was now+60_000)", () 
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["near-future", "old"], nextCursor: null }),
             threadRead: async (id: string) => {
-                if (id === "near-future") return makeThread({ id: "near-future", updatedAt: nearFuture, preview: "x" });
+                if (id === "near-future")
+                    return makeThread({ id: "near-future", updatedAt: nearFuture, preview: "x" });
                 if (id === "old") return makeThread({ id: "old", updatedAt: 1000, preview: "x" });
                 return null;
             },
@@ -36,7 +43,8 @@ describe("VS18: future-date guard — now+5_000 threshold (was now+60_000)", () 
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["far-future", "old"], nextCursor: null }),
             threadRead: async (id: string) => {
-                if (id === "far-future") return makeThread({ id: "far-future", updatedAt: farFuture, preview: "x" });
+                if (id === "far-future")
+                    return makeThread({ id: "far-future", updatedAt: farFuture, preview: "x" });
                 if (id === "old") return makeThread({ id: "old", updatedAt: 1000, preview: "x" });
                 return null;
             },
@@ -59,7 +67,8 @@ describe("VS18: future-date guard — now+5_000 threshold (was now+60_000)", () 
         const mock: AppServerClient = {
             threadLoadedList: async () => ({ data: ["boundary", "old"], nextCursor: null }),
             threadRead: async (id: string) => {
-                if (id === "boundary") return makeThread({ id: "boundary", updatedAt: boundary, preview: "x" });
+                if (id === "boundary")
+                    return makeThread({ id: "boundary", updatedAt: boundary, preview: "x" });
                 if (id === "old") return makeThread({ id: "old", updatedAt: 1000, preview: "x" });
                 return null;
             },
@@ -82,8 +91,10 @@ describe("VS18: future-date guard — now+5_000 threshold (was now+60_000)", () 
             threadLoadedList: async () => ({ data: ["t1", "far-future"], nextCursor: null }),
             threadRead: async (id: string) => {
                 readCount++;
-                if (id === "t1") return makeThread({ id: "t1", updatedAt: 100, preview: "current" });
-                if (id === "far-future") return makeThread({ id: "far-future", updatedAt: farFuture, preview: "x" });
+                if (id === "t1")
+                    return makeThread({ id: "t1", updatedAt: 100, preview: "current" });
+                if (id === "far-future")
+                    return makeThread({ id: "far-future", updatedAt: farFuture, preview: "x" });
                 return null;
             },
             threadResume: async () => true,

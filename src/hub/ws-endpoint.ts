@@ -1,11 +1,11 @@
-import { EventEmitter } from "node:events";
 import * as crypto from "node:crypto";
+import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
+import type * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
-import type * as net from "node:net";
-import type { ServerMsg } from "../protocol";
 import { makeLogger } from "../logger";
+import type { ServerMsg } from "../protocol";
 import type { PeerRegistry } from "./registry";
 
 const log = makeLogger("hub:ws");
@@ -65,11 +65,7 @@ export class VirtualSocket extends EventEmitter implements SocketLike {
     }
 }
 
-export type WsHandler = (
-    line: string,
-    socket: SocketLike,
-    send: (msg: ServerMsg) => void,
-) => void;
+export type WsHandler = (line: string, socket: SocketLike, send: (msg: ServerMsg) => void) => void;
 
 function loadOrCreateToken(): string {
     const envToken = process.env.ECORELAY_WS_TOKEN;
@@ -212,9 +208,7 @@ export function addWsEndpoint(
                 if (authTimer) clearTimeout(authTimer);
 
                 if (vs) {
-                    const name = registry.removeBySocket(
-                        vs as unknown as net.Socket,
-                    );
+                    const name = registry.removeBySocket(vs as unknown as net.Socket);
                     vs.destroy();
                     if (name && opts.onDisconnect) {
                         opts.onDisconnect(name);

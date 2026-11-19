@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeEach } from "bun:test";
-import { ThreadTracker } from "./thread-tracker";
+import { describe, expect, test } from "bun:test";
 import type { AppServerClient, ThreadInfo } from "./app-server-client";
+import { ThreadTracker } from "./thread-tracker";
 
 // ── Mock AppServerClient ──────────────────────────────────────────
 
@@ -86,7 +86,10 @@ describe("discover", () => {
                 ["old", makeThread({ id: "old", updatedAt: 100, preview: "old content" })],
                 ["new", makeThread({ id: "new", updatedAt: 999, preview: "new content" })],
             ]),
-            resumeResults: new Map([["old", true], ["new", true]]),
+            resumeResults: new Map([
+                ["old", true],
+                ["new", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -98,10 +101,21 @@ describe("discover", () => {
         const data: MockThreadData = {
             loaded: ["archived", "live"],
             threads: new Map([
-                ["archived", makeThread({ id: "archived", updatedAt: 999, status: { type: "archived" }, preview: "old" })],
+                [
+                    "archived",
+                    makeThread({
+                        id: "archived",
+                        updatedAt: 999,
+                        status: { type: "archived" },
+                        preview: "old",
+                    }),
+                ],
                 ["live", makeThread({ id: "live", updatedAt: 100, preview: "active content" })],
             ]),
-            resumeResults: new Map([["archived", true], ["live", true]]),
+            resumeResults: new Map([
+                ["archived", true],
+                ["live", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -116,7 +130,10 @@ describe("discover", () => {
                 ["empty", makeThread({ id: "empty", updatedAt: 200, preview: "" })],
                 ["also-empty", makeThread({ id: "also-empty", updatedAt: 100, preview: "" })],
             ]),
-            resumeResults: new Map([["empty", true], ["also-empty", true]]),
+            resumeResults: new Map([
+                ["empty", true],
+                ["also-empty", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -132,7 +149,10 @@ describe("discover", () => {
                 ["stale", makeThread({ id: "stale", updatedAt: 999, preview: "stale" })],
                 ["good", makeThread({ id: "good", updatedAt: 100, preview: "good" })],
             ]),
-            resumeResults: new Map([["stale", false], ["good", true]]),
+            resumeResults: new Map([
+                ["stale", false],
+                ["good", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -147,7 +167,10 @@ describe("discover", () => {
                 ["bad1", makeThread({ id: "bad1", preview: "a" })],
                 ["bad2", makeThread({ id: "bad2", preview: "b" })],
             ]),
-            resumeResults: new Map([["bad1", false], ["bad2", false]]),
+            resumeResults: new Map([
+                ["bad1", false],
+                ["bad2", false],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         setTimeout(() => tracker.close(), 100);
@@ -280,10 +303,16 @@ describe("VS18 guards", () => {
         const data: MockThreadData = {
             loaded: ["future", "normal"],
             threads: new Map([
-                ["future", makeThread({ id: "future", updatedAt: Date.now() + 10_000, preview: "future" })],
+                [
+                    "future",
+                    makeThread({ id: "future", updatedAt: Date.now() + 10_000, preview: "future" }),
+                ],
                 ["normal", makeThread({ id: "normal", updatedAt: 100, preview: "ok" })],
             ]),
-            resumeResults: new Map([["future", true], ["normal", true]]),
+            resumeResults: new Map([
+                ["future", true],
+                ["normal", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -299,7 +328,10 @@ describe("VS18 guards", () => {
                 [longId, makeThread({ id: longId, updatedAt: 999, preview: "long" })],
                 ["ok", makeThread({ id: "ok", updatedAt: 100, preview: "ok" })],
             ]),
-            resumeResults: new Map([[longId, true], ["ok", true]]),
+            resumeResults: new Map([
+                [longId, true],
+                ["ok", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -314,7 +346,10 @@ describe("VS18 guards", () => {
                 ["../evil", makeThread({ id: "../evil", updatedAt: 999, preview: "evil" })],
                 ["safe-id", makeThread({ id: "safe-id", updatedAt: 100, preview: "ok" })],
             ]),
-            resumeResults: new Map([["../evil", true], ["safe-id", true]]),
+            resumeResults: new Map([
+                ["../evil", true],
+                ["safe-id", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
@@ -333,7 +368,10 @@ describe("pollCycle (via discover+tracking)", () => {
                 ["a", makeThread({ id: "a", preview: "x" })],
                 ["b", makeThread({ id: "b", preview: "y" })],
             ]),
-            resumeResults: new Map([["a", false], ["b", false]]),
+            resumeResults: new Map([
+                ["a", false],
+                ["b", false],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         setTimeout(() => tracker.close(), 100);
@@ -349,7 +387,10 @@ describe("pollCycle (via discover+tracking)", () => {
                 ["stale", makeThread({ id: "stale", updatedAt: 999, preview: "s" })],
                 ["ok", makeThread({ id: "ok", updatedAt: 100, preview: "o" })],
             ]),
-            resumeResults: new Map([["stale", false], ["ok", true]]),
+            resumeResults: new Map([
+                ["stale", false],
+                ["ok", true],
+            ]),
         };
         const tracker = new ThreadTracker({ appServer: createMockAppServer(data) });
         const found = await tracker.discover();
